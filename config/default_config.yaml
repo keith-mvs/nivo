@@ -1,0 +1,151 @@
+# Image Engine Configuration
+
+# Analysis settings
+analysis:
+  # Enable different analysis levels
+  extract_metadata: true
+  content_analysis: true
+  ml_analysis: true
+
+  # ML model configuration
+  ml_models:
+    scene_detection: "openai/clip-vit-base-patch32"
+    object_detection: "facebook/detr-resnet-50"
+    use_gpu: true
+    batch_size: 8
+
+  # Quality thresholds
+  quality:
+    min_resolution: [640, 480]
+    blur_threshold: 100.0  # Lower = more blurry
+    jpeg_quality_threshold: 85
+
+# Deduplication settings
+deduplication:
+  hash_algorithm: "sha256"  # sha256, md5
+  check_perceptual: false  # Exact duplicates only
+  keep_strategy: "highest_quality"  # highest_quality, oldest, newest
+  safe_mode: true  # Require confirmation before deletion
+
+# Renaming settings
+renaming:
+  # Pattern variables: {date}, {time}, {datetime}, {camera}, {seq}, {tags}
+  pattern: "{date}_{time}"
+  date_format: "%Y-%m-%d"
+  time_format: "%H%M%S"
+  datetime_format: "%Y-%m-%d_%H%M%S"
+
+  # Collision handling
+  collision_suffix: "_{seq:03d}"
+  preserve_original: true  # Keep backup before rename
+
+  # Tag inclusion
+  include_tags_in_filename: false  # Set true to add tags to filename
+  max_filename_length: 200
+
+# Format conversion settings
+formatting:
+  # Target formats by image type
+  photo_format: "jpg"  # jpg, png
+  graphic_format: "png"  # For screenshots, graphics with transparency
+
+  # Quality settings
+  jpeg_quality: 95
+  png_compression: 6
+
+  # Preserve original if conversion fails
+  safe_conversion: true
+
+  # Supported input formats
+  supported_formats:
+    - jpg
+    - jpeg
+    - png
+    - heic
+    - heif
+    - webp
+    - bmp
+    - tiff
+    - raw
+    - cr2
+    - nef
+    - arw
+
+# Tag embedding settings
+tagging:
+  # Write tags to EXIF/IPTC
+  embed_tags: true
+
+  # Tag categories to include
+  categories:
+    - scene  # indoor, outdoor, landscape, portrait, etc.
+    - objects  # detected objects
+    - quality  # quality scores
+    - location  # from GPS if available
+    - datetime  # normalized date/time
+
+  # IPTC fields to populate
+  iptc_fields:
+    keywords: true  # Write to IPTC keywords
+    caption: true  # Generate caption from tags
+
+  # Tag confidence threshold
+  min_confidence: 0.6
+
+# Processing settings
+processing:
+  # Threading
+  max_workers: 4
+
+  # Batch processing
+  batch_size: 100
+
+  # Progress reporting
+  show_progress: true
+  verbose: false
+
+# Video analysis settings
+video:
+  # Frame extraction
+  keyframe_detection: true  # Use scene detection vs uniform sampling
+  keyframe_threshold: 30.0  # Scene change detection sensitivity
+  min_scene_duration: 1.0  # Minimum seconds between scenes
+  max_frames_per_video: 50  # Limit frames analyzed per video
+  frames_per_scene: 3  # Frames to analyze per detected scene
+
+  # Content tagging
+  activity_inference: true  # Infer activities from scenes/objects
+  min_tag_percentage: 10  # Minimum % of video for scene tag
+
+  # Supported video formats
+  supported_formats:
+    - mp4
+    - avi
+    - mov
+    - mkv
+    - wmv
+    - webm
+    - m4v
+
+# NVIDIA Build API integration
+nvidia_build:
+  enabled: false  # Enable NVIDIA Build API models
+  api_key: ""  # Set via environment variable NVIDIA_BUILD_API_KEY
+  models:
+    retail_detection: "nvidia/retail-object-detection"
+    vision_language: "nvidia/nemotron-nano-12b-v2-vl"
+  timeout: 30  # API timeout in seconds
+
+# Output settings
+output:
+  # Report generation
+  generate_report: true
+  report_format: "json"  # json, csv, html
+
+  # Logging
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_file: "image_engine.log"
+
+  # Video output
+  save_keyframes: false  # Save extracted keyframes to disk
+  keyframes_dir: "keyframes"  # Directory for keyframe exports

@@ -1,0 +1,68 @@
+# NVIDIA Build API Configuration
+
+nvidia_build:
+  # Enable/disable NVIDIA Build API integration
+  enabled: false  # Set to true after obtaining API key
+
+  # API Configuration
+  api:
+    # API key (set via NVIDIA_API_KEY environment variable)
+    # Get your key at: https://build.nvidia.com
+    key_env_var: "NVIDIA_API_KEY"
+    base_url: "https://ai.api.nvidia.com/v1"
+    timeout: 30  # Request timeout in seconds
+
+  # Rate Limiting
+  rate_limiting:
+    max_requests_per_minute: 100  # Free tier limit
+    retry_attempts: 3
+    retry_delay: 1.0  # Seconds between retries
+
+  # Retail Object Detection
+  retail_detection:
+    enabled: true
+    confidence_threshold: 0.6  # Minimum confidence for detections
+    max_detections: 50  # Maximum detections per image
+
+    # Product categories to track
+    categories:
+      - bottle
+      - package
+      - box
+      - can
+      - bag
+
+  # Vision-Language Model
+  vision_language:
+    enabled: true
+    max_tokens: 100  # Maximum response length
+    temperature: 0.3  # Sampling temperature (0.0-1.0)
+
+    # Context-specific prompts
+    prompts:
+      default: "Describe what is happening in this image in one clear sentence."
+      video: "Describe the activity happening in this video frame"
+      action: "What action is being performed in this image?"
+      scene: "Describe the scene, setting, and environment in this image"
+      products: "List all visible products and items in this image"
+
+  # Caching (to reduce API calls)
+  caching:
+    enabled: true
+    cache_dir: ".cache/nvidia_build"
+    ttl_hours: 24  # Cache validity duration
+    max_size_mb: 500  # Maximum cache size
+
+  # Integration with Video Analyzer
+  video_integration:
+    # Analyze every Nth frame (to reduce API costs)
+    frame_sampling: 5
+
+    # Enable retail detection for videos
+    detect_products: true
+
+    # Generate frame descriptions
+    generate_descriptions: true
+
+    # Add descriptions to database
+    store_descriptions: true

@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Build artifacts
+build/
+dist/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+nul
+
+# Project specific
+*.log
+logs/
+image_engine.log
+image_engine_analysis.json
+analysis_report.json
+*.backup
+
+# ML Models and weights
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Analysis results and databases
+*_yolo.json
+camera_roll*.json
+analysis_progress.json
+pictures_analysis*.json
+*.db
+*.db-journal
+
+# Models cache (HuggingFace)
+models/
+.cache/
+
+# Test files
+test_photos/
+processed/
+output/

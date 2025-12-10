@@ -1,0 +1,23 @@
+# NVIDIA Build API & TensorRT Dependencies
+
+# Core dependencies (already in requirements.txt)
+# torch>=2.0.0
+# transformers>=4.30.0
+# opencv-python>=4.8.0
+
+# NVIDIA Build API
+python-dotenv>=1.0.0     # Environment variable management
+requests>=2.31.0         # HTTP requests
+httpx>=0.25.0           # Async HTTP client (optional)
+
+# ONNX Export
+onnx>=1.14.0            # ONNX model format
+onnxruntime>=1.16.0     # ONNX inference (for testing)
+
+# TensorRT (included with CUDA Toolkit 12.1)
+# tensorrt>=8.6.0        # Usually installed with CUDA
+# pycuda>=2022.2         # Python CUDA bindings
+
+# Utilities
+pillow>=10.0.0          # Image processing
+pyyaml>=6.0             # Config file parsing

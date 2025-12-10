@@ -1,0 +1,155 @@
+# Image Engine - YOLO-Optimized Configuration
+# With YOLOv8 for 3-5x Faster Object Detection
+
+# Analysis settings
+analysis:
+  # Enable different analysis levels
+  extract_metadata: true
+  content_analysis: true
+  ml_analysis: true
+
+  # ML model configuration - YOLO OPTIMIZED
+  ml_models:
+    # Model selection
+    scene_detection: "openai/clip-vit-base-patch32"  # CLIP for scene classification
+
+    # YOLO configuration - NEW
+    use_yolo: true                # Enable YOLOv8 (3-5x faster than DETR)
+    yolo_model: "yolov8n.pt"      # Options: yolov8n.pt (fastest), yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt (most accurate)
+
+    # TensorRT fallback (if use_yolo is false)
+    use_tensorrt: false           # Not needed with YOLO
+    tensorrt_precision: "fp16"    # Options: "fp32", "fp16", "int8"
+
+    # GPU settings
+    use_gpu: true
+    batch_size: 16  # INCREASED from 8 for better GPU utilization (RTX 2080 Ti)
+
+    # Advanced GPU settings
+    enable_amp: true             # Automatic Mixed Precision (FP16)
+    cudnn_benchmark: true        # Auto-tune kernels (first run slower, subsequent faster)
+
+  # Quality thresholds
+  quality:
+    min_resolution: [640, 480]
+    blur_threshold: 100.0
+    jpeg_quality_threshold: 85
+
+# Deduplication settings
+deduplication:
+  hash_algorithm: "sha256"
+  check_perceptual: false
+  keep_strategy: "highest_quality"
+  safe_mode: true
+
+# Renaming settings
+renaming:
+  pattern: "{date}_{time}"
+  date_format: "%Y-%m-%d"
+  time_format: "%H%M%S"
+  datetime_format: "%Y-%m-%d_%H%M%S"
+  collision_suffix: "_{seq:03d}"
+  preserve_original: true
+  include_tags_in_filename: false
+  max_filename_length: 200
+
+# Format conversion settings
+formatting:
+  photo_format: "jpg"
+  graphic_format: "png"
+  jpeg_quality: 95
+  png_compression: 6
+  safe_conversion: true
+
+  supported_formats:
+    - jpg
+    - jpeg
+    - png
+    - heic
+    - heif
+    - webp
+    - bmp
+    - tiff
+    - raw
+    - cr2
+    - nef
+    - arw
+
+# Tag embedding settings
+tagging:
+  embed_tags: true
+  categories:
+    scene: true
+    objects: true
+    quality: true
+    location: true
+    datetime: true
+    caption: true
+  iptc_fields:
+    keywords: true
+    caption: true
+  min_confidence: 0.6
+
+# Processing settings - OPTIMIZED
+processing:
+  # Threading - INCREASED for better CPU utilization
+  max_workers: 8  # Increased from 4 (for content analysis phase)
+
+  # Batch processing
+  batch_size: 100
+
+  # GPU memory management
+  clear_cache_frequency: 10  # Clear GPU cache every N batches
+
+  # Progress reporting
+  show_progress: true
+  verbose: false
+
+# Output settings
+output:
+  generate_report: true
+  report_format: "json"
+  log_level: "INFO"
+  log_file: "image_engine.log"
+
+  # Performance logging
+  log_performance_stats: true  # Log processing speeds, GPU utilization
+
+# Video support settings (Future)
+video:
+  enabled: false  # Enable when video support is implemented
+
+  # Frame extraction
+  extract_fps: 1  # Extract 1 frame per second
+  extraction_strategy: "adaptive"  # uniform, keyframes, adaptive, motion
+
+  # Analysis settings
+  analyze_frames: true
+  analyze_audio: false  # Requires Whisper installation
+  action_recognition: false  # Requires NVIDIA TAO ActionRecognitionNet
+
+  # Performance
+  video_batch_size: 8  # Number of video clips to process in batch
+  max_frames_per_video: 300  # Limit frames for very long videos
+
+  # Model configuration
+  action_model: "nvidia/tao/actionrecognitionnet"
+  clip_length: 16  # Frames per action recognition clip
+
+# Experimental features
+experimental:
+  # Segmentation support
+  enable_segmentation: false  # Enable SegFormer for background removal
+  segmentation_model: "nvidia/tao/segformer-b0"
+
+  # Multi-GPU support
+  use_multi_gpu: false
+  gpu_ids: [0]  # List of GPU indices to use
+
+  # Advanced optimizations
+  use_cuda_streams: false  # Overlap CPU/GPU operations
+  pin_memory: true  # Use pinned memory for faster GPU transfer
+
+  # Model caching
+  cache_models: true  # Keep models in memory between runs
+  model_cache_dir: "./cache/models"

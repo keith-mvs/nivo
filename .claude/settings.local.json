@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir C:UserskjfleProjectsnivo)",
+      "Bash(tree:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m src.cli:*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(C:/Users/kjfle/.venv/Scripts/python.exe -m src.cli analyze:*)",
+      "Bash(timeout:*)",
+      "Bash(dir \"C:\\Users\\kjfle\\Videos\" /s /b)",
+      "Bash(dir:*)",
+      "Bash(pwsh -Command:*)",
+      "WebSearch",
+      "Bash(C:/Users/kjfle/.venv/Scripts/python.exe -m pip install ultralytics)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(C:/Users/kjfle/.venv/Scripts/python.exe:*)",
+      "Bash(git restore:*)",
+      "Bash(git reset:*)",
+      "Bash(git bisect:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git clone:*)",
+      "Bash(git tag:*)",
+      "Bash(pwsh:*)",
+      "Bash(git mv:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "test_images_count": 20,
+  "results": [
+    {
+      "name": "PyTorch Baseline (DETR)",
+      "success": true,
+      "num_images": 20,
+      "batch_size": 8,
+      "total_time_sec": 2.919741630554199,
+      "images_per_sec": 6.849921167923266,
+      "time_per_image_sec": 0.14598708152770995,
+      "warmup_time_sec": 29.87165141105652,
+      "memory": {
+        "gpu_allocated_gb": 0.782915584,
+        "gpu_reserved_gb": 0.803209216,
+        "gpu_max_allocated_gb": 1.08822528
+      },
+      "sample_results": [
+        {
+          "image_path": "C:\\Users\\kjfle\\Pictures\\jpeg\\1636_44_66_file_Uiemeu2wftDEeXvrtcswkx_61CC6F20_1BD1_4F67_BF9.jpeg",
+          "device_used": "cuda",
+          "primary_scene": "nature photo",
+          "scene_confidence": 0.4228561818599701,
+          "objects": [
+            {
+              "object": "toothbrush",
+              "confidence": 0.6983579397201538
+            }
+          ],
+          "object_count": 1,
+          "unique_objects": [
+            "toothbrush"
+          ],
+          "object_counts": {
+            "toothbrush": 1
+          },
+          "tags": [
+            "nature",
+            "toothbrush"
+          ],
+          "tag_string": "nature, toothbrush"
+        },
+        {
+          "image_path": "C:\\Users\\kjfle\\Pictures\\jpeg\\2017_05_17_file_KeSM8Ug6Eh3m57Xddx6RuJ_WhatsApp_Image_2017_05.jpeg",
+          "device_used": "cuda",
+          "primary_scene": "nature photo",
+          "scene_confidence": 0.39836424589157104,
+          "objects": [],
+          "object_count": 0,
+          "unique_objects": [],
+          "object_counts": {},
+          "tags": [
+            "nature"
+          ],
+          "tag_string": "nature"
+        }
+      ]
+    },
+    {
+      "name": "YOLO Analyzer (YOLOv8)",
+      "success": true,
+      "num_images": 20,
+      "batch_size": 16,
+      "total_time_sec": 1.0574133396148682,
+      "images_per_sec": 18.914079528526106,
+      "time_per_image_sec": 0.05287066698074341,
+      "warmup_time_sec": 5.290698289871216,
+      "memory": {
+        "allocated_gb": 1.401334784,
+        "reserved_gb": 2.030043136,
+        "total_gb": 11.810832384,
+        "utilization": 11.864826613731074
+      },
+      "sample_results": [
+        {
+          "primary_scene": "vehicle",
+          "scene_scores": {
+            "indoor": 0.0007649202016182244,
+            "outdoor": 0.0006856700056232512,
+            "nature": 6.631784344790503e-05,
+            "city": 0.0010133545147255063,
+            "landscape": 0.00016159350343514234,
+            "portrait": 0.00041587985469959676,
+            "food": 0.0006542708724737167,
+            "animal": 0.0011663639452308416,
+            "vehicle": 0.9806995987892151,
+            "architecture": 0.0011482811532914639,
+            "beach": 0.00011639142758212984,
+            "mountain": 0.0006542708724737167,
+            "forest": 0.0002369612193433568,
+            "sunset": 5.3287883929442614e-05,
+            "night": 0.00027703572413884103,
+            "party": 0.0002813983883243054,
+            "sports": 0.0023561199195683002,
+            "concert": 0.0015942305326461792,
+            "travel": 0.007257360033690929,
+            "selfie": 0.00039683535578660667
+          },
+          "scene_confidence": 0.9806995987892151,
+          "objects": [],
+          "object_count": 0,
+          "unique_objects": [],
+          "object_counts": {}
+        },
+        {
+          "primary_scene": "vehicle",
+          "scene_scores": {
+            "indoor": 0.015175933949649334,
+            "outdoor": 0.0056708320043981075,
+            "nature": 0.002291223267093301,
+            "city": 0.012194205075502396,
+            "landscape": 0.004926905035972595,
+            "portrait": 0.0018994909478351474,
+            "food": 0.030180951580405235,
+            "animal": 0.014709019102156162,
+            "vehicle": 0.46479010581970215,
+            "architecture": 0.05551126226782799,
+            "beach": 0.004556641913950443,
+            "mountain": 0.012581291608512402,
+            "forest": 0.006629874464124441,
+            "sunset": 0.0035487159620970488,
+            "night": 0.008380946703255177,
+            "party": 0.022781776264309883,
+            "sports": 0.2566814422607422,
+            "concert": 0.008512928150594234,
+            "travel": 0.06801381707191467,
+            "selfie": 0.0009626152459532022
+          },
+          "scene_confidence": 0.46479010581970215,
+          "objects": [],
+          "object_count": 0,
+          "unique_objects": [],
+          "object_counts": {}
+        }
+      ]
+    },
+    {
+      "name": "TensorRT FP16",
+      "success": true,
+      "num_images": 20,
+      "batch_size": 16,
+      "total_time_sec": 2.8956387042999268,
+      "images_per_sec": 6.906939035695533,
+      "time_per_image_sec": 0.14478193521499633,
+      "warmup_time_sec": 4.471834897994995,
+      "memory": {
+        "gpu_allocated_gb": 2.175075328,
+        "gpu_reserved_gb": 2.197815296,
+        "gpu_max_allocated_gb": 2.521376768
+      },
+      "sample_results": [
+        {
+          "image_path": "C:\\Users\\kjfle\\Pictures\\jpeg\\1636_44_66_file_Uiemeu2wftDEeXvrtcswkx_61CC6F20_1BD1_4F67_BF9.jpeg",
+          "device_used": "cuda",
+          "tensorrt_enabled": false,
+          "precision": "fp32",
+          "primary_scene": "nature photo",
+          "scene_confidence": 0.42055851221084595,
+          "objects": [
+            {
+              "object": "toothbrush",
+              "confidence": 0.697265625
+            }
+          ],
+          "object_count": 1,
+          "unique_objects": [
+            "toothbrush"
+          ],
+          "object_counts": {
+            "toothbrush": 1
+          },
+          "tags": [
+            "nature",
+            "toothbrush"
+          ],
+          "tag_string": "nature, toothbrush"
+        },
+        {
+          "image_path": "C:\\Users\\kjfle\\Pictures\\jpeg\\2017_05_17_file_KeSM8Ug6Eh3m57Xddx6RuJ_WhatsApp_Image_2017_05.jpeg",
+          "device_used": "cuda",
+          "tensorrt_enabled": false,
+          "precision": "fp32",
+          "primary_scene": "nature photo",
+          "scene_confidence": 0.39845508337020874,
+          "objects": [],
+          "object_count": 0,
+          "unique_objects": [],
+          "object_counts": {},
+          "tags": [
+            "nature"
+          ],
+          "tag_string": "nature"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "baseline_time": 2.919741630554199,
+    "best_time": 1.0574133396148682,
+    "max_speedup": 2.7612112701525304
+  }
+}

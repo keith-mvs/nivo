@@ -1,0 +1,20 @@
+# Video Engine Dependencies
+# Install with: python -m pip install -r requirements-video.txt
+
+# First install base requirements
+-r requirements.txt
+
+# Video processing core
+moviepy>=1.0.3              # Video I/O and basic editing
+scenedetect[opencv]>=0.6.1  # Scene detection and segmentation
+ffmpeg-python>=0.2.0        # FFmpeg wrapper for advanced operations
+pymediainfo>=6.0.1          # Video metadata extraction
+
+# NVIDIA Build API integration
+requests>=2.31.0            # API calls to NVIDIA Build
+httpx>=0.25.0               # Async API client for future optimization
+
+# Optional: Advanced features (install separately)
+# TensorRT requires manual NVIDIA installation
+# RAPIDS requires manual NVIDIA installation
+# onnx>=1.15.0              # For TensorRT model conversion
