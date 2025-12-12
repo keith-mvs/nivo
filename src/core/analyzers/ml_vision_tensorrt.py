@@ -12,25 +12,15 @@ Key Features:
 """
 
 import torch
-import torch.nn as nn
-from torchvision import transforms
 from PIL import Image
-import numpy as np
-from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
-import warnings
+from typing import Dict, Any, List, Optional
 from tqdm import tqdm
-import sys
-import os
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.gpu_monitor import get_monitor
-
-warnings.filterwarnings('ignore')
+from .base_ml_analyzer import BaseMLAnalyzer
+from ..interfaces.monitors import GPUMonitor
 
 
-class TensorRTVisionAnalyzer:
+class TensorRTVisionAnalyzer(BaseMLAnalyzer):
     """TensorRT-optimized ML vision analyzer for maximum GPU performance."""
 
     def __init__(
@@ -42,6 +32,7 @@ class TensorRTVisionAnalyzer:
         min_confidence: float = 0.6,
         use_tensorrt: bool = True,
         precision: str = "fp16",  # "fp16" or "fp32" or "int8"
+        gpu_monitor: Optional[GPUMonitor] = None,
     ):
         """
         Initialize TensorRT-optimized vision analyzer.
@@ -54,277 +45,113 @@ class TensorRTVisionAnalyzer:
             min_confidence: Confidence threshold
             use_tensorrt: Enable TensorRT optimization
             precision: TensorRT precision ("fp16", "fp32", "int8")
+            gpu_monitor: Optional GPU monitor for tracking (defaults to global instance)
         """
-        self.device = self._setup_device(use_gpu)
-        self.batch_size = batch_size
-        self.min_confidence = min_confidence
+        # Initialize base class (handles device, CLIP, monitoring)
+        super().__init__(
+            use_gpu=use_gpu,
+            batch_size=batch_size,
+            scene_model=scene_model,
+            min_confidence=min_confidence,
+            gpu_monitor=gpu_monitor,
+        )
+
+        # TensorRT-specific configuration
+        self.object_model_name = object_model
         self.use_tensorrt = use_tensorrt and self.device.type == "cuda"
         self.precision = precision
+        self.use_amp = precision == "fp16"
 
-        # Model cache
-        self._clip_model = None
-        self._clip_processor = None
+        # DETR model cache
         self._detr_model = None
         self._detr_processor = None
 
         # TensorRT models (compiled)
-        self._clip_trt = None
-        self._detr_trt = None
+        self._tensorrt_detr = None
 
-        self.scene_model_name = scene_model
-        self.object_model_name = object_model
-
-        # Check TensorRT availability
-        self.tensorrt_available = False
-        if self.use_tensorrt:
-            try:
-                import torch_tensorrt
-                self.tensorrt_available = True
-                print(f"TensorRT available - will compile models with {precision} precision")
-            except ImportError:
-                print("TensorRT not available - falling back to PyTorch")
-                self.use_tensorrt = False
-
-        print(f"ML Analyzer initialized on device: {self.device}")
+        print(f"TensorRT ML Analyzer initialized on device: {self.device}")
         print(f"Batch size: {batch_size}")
-        if self.tensorrt_available:
-            print(f"TensorRT: Enabled ({precision})")
+        print(f"TensorRT enabled: {self.use_tensorrt}")
+        print(f"Precision: {precision}")
 
-    def _setup_device(self, use_gpu: bool) -> torch.device:
-        """Setup computation device."""
-        if use_gpu and torch.cuda.is_available():
-            device = torch.device("cuda")
-            print(f"GPU detected: {torch.cuda.get_device_name(0)}")
-            print(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
-        else:
-            device = torch.device("cpu")
-            if use_gpu:
-                print("GPU requested but not available, using CPU")
-        return device
+    def _load_detection_model(self):
+        """Load DETR model with optional TensorRT optimization (implements abstract method)."""
+        self._load_detr_model()
 
-    def _compile_to_tensorrt(self, model: nn.Module, input_shape: Tuple[int, ...], model_name: str) -> Optional[nn.Module]:
-        """
-        Compile PyTorch model to TensorRT for optimized inference.
+        # Optionally compile with TensorRT
+        if self.use_tensorrt and self._detr_model != "FAILED":
+            self._compile_tensorrt()
 
-        Args:
-            model: PyTorch model
-            input_shape: Input tensor shape
-            model_name: Model name for logging
+    def _load_detr_model(self):
+        """Load DETR model for object detection."""
+        try:
+            from transformers import DetrImageProcessor, DetrForObjectDetection
 
-        Returns:
-            TensorRT-compiled model or None if compilation fails
-        """
-        if not self.tensorrt_available:
-            return None
+            print(f"Loading DETR model: {self.object_model_name}")
+            self._detr_processor = DetrImageProcessor.from_pretrained(self.object_model_name)
+            self._detr_model = DetrForObjectDetection.from_pretrained(self.object_model_name).to(self.device)
+            self._detr_model.eval()
+            print("DETR model loaded successfully")
 
+        except Exception as e:
+            print(f"ERROR: Failed to load DETR model: {e}")
+            self._detr_model = "FAILED"
+            self._detr_processor = None
+
+    def _compile_tensorrt(self):
+        """Compile DETR model with TensorRT for faster inference."""
         try:
             import torch_tensorrt
 
-            print(f"Compiling {model_name} to TensorRT ({self.precision})...")
+            print("Compiling DETR model with TensorRT...")
+            print(f"Target precision: {self.precision}")
 
-            # Create example input
-            example_input = torch.randn(*input_shape).to(self.device)
+            # Create sample input for compilation
+            sample_input = torch.randn(1, 3, 800, 800).to(self.device)
 
-            # Configure precision
-            enabled_precisions = {torch.float32}
-            if self.precision == "fp16":
-                enabled_precisions.add(torch.float16)
-            elif self.precision == "int8":
-                enabled_precisions.add(torch.int8)
+            # Configure TensorRT compilation
+            compile_settings = {
+                "inputs": [sample_input],
+                "enabled_precisions": {torch.float16} if self.precision == "fp16" else {torch.float32},
+                "workspace_size": 1 << 30,  # 1GB workspace
+            }
 
             # Compile model
-            trt_model = torch_tensorrt.compile(
-                model,
-                inputs=[example_input],
-                enabled_precisions=enabled_precisions,
-                workspace_size=1 << 30,  # 1GB workspace
-                truncate_long_and_double=True,
-            )
-
-            print(f"{model_name} compiled to TensorRT successfully")
-            return trt_model
+            self._tensorrt_detr = torch_tensorrt.compile(self._detr_model, **compile_settings)
+            print("TensorRT compilation successful!")
 
         except Exception as e:
-            print(f"TensorRT compilation failed for {model_name}: {e}")
-            print("Falling back to PyTorch")
-            return None
-
-    def analyze_batch(self, image_paths: List[str], show_progress: bool = True) -> List[Dict[str, Any]]:
-        """
-        Analyze multiple images with TensorRT-optimized batch processing.
-
-        Args:
-            image_paths: List of image paths
-            show_progress: Show progress bar
-
-        Returns:
-            List of analysis results
-        """
-        results = []
-
-        # Start GPU monitoring
-        monitor = get_monitor()
-        if self.device.type == "cuda":
-            monitor.start()
-
-        # Calculate batches
-        total_batches = (len(image_paths) + self.batch_size - 1) // self.batch_size
-
-        # Process in batches
-        iterator = range(0, len(image_paths), self.batch_size)
-        if show_progress:
-            iterator = tqdm(
-                iterator,
-                total=total_batches,
-                desc=f"ML Analysis (TRT {self.precision})" if self.use_tensorrt else "ML Analysis (PyTorch)",
-                unit="batch",
-                ncols=120,
-                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}'
-            )
-
-        for i in iterator:
-            batch_paths = image_paths[i:i + self.batch_size]
-            batch_results = self._analyze_batch_internal(batch_paths)
-            results.extend(batch_results)
-
-            # Update progress with stats
-            if show_progress and batch_results:
-                status_parts = []
-
-                first_result = batch_results[0]
-                if "primary_scene" in first_result:
-                    status_parts.append(f"Scene: {first_result['primary_scene']}")
-
-                if self.device.type == "cuda":
-                    gpu_status = monitor.get_status_string()
-                    status_parts.append(gpu_status)
-
-                # Add TensorRT status
-                if self.use_tensorrt:
-                    status_parts.append(f"TRT-{self.precision}")
-
-                iterator.set_postfix_str(" | ".join(status_parts))
-
-            # Clear GPU cache
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-
-        # Print final stats
-        if self.device.type == "cuda" and show_progress:
-            print()
-            monitor.print_stats()
-            monitor.stop()
-
-        return results
-
-    def _analyze_batch_internal(self, image_paths: List[str]) -> List[Dict[str, Any]]:
-        """Internal batch processing with TensorRT optimization."""
-        results = []
-
-        try:
-            # Load images
-            images = []
-            valid_paths = []
-            for path in image_paths:
-                try:
-                    img = Image.open(path).convert("RGB")
-                    images.append(img)
-                    valid_paths.append(path)
-                except Exception as e:
-                    results.append({"image_path": path, "error": str(e)})
-
-            if not images:
-                return results
-
-            # Batch scene classification
-            scene_results = self._classify_scene_batch(images)
-
-            # Batch object detection
-            object_results = self._detect_objects_batch(images)
-
-            # Combine results
-            for path, scene, objects in zip(valid_paths, scene_results, object_results):
-                result = {
-                    "image_path": path,
-                    "device_used": str(self.device),
-                    "tensorrt_enabled": self.use_tensorrt,
-                    "precision": self.precision if self.use_tensorrt else "fp32",
-                }
-                result.update(scene)
-                result.update(objects)
-
-                tags = self._generate_tags(scene, objects)
-                result["tags"] = tags
-                result["tag_string"] = ", ".join(tags)
-
-                results.append(result)
-
-        except Exception as e:
-            for path in image_paths:
-                results.append({"image_path": path, "error": str(e)})
-
-        return results
-
-    def _classify_scene_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
-        """TensorRT-optimized batch scene classification."""
-        results = []
-
-        try:
-            if self._clip_model is None:
-                self._load_clip_model()
-
-            if self._clip_model == "FAILED":
-                return [{"primary_scene": "unknown", "scene_confidence": 0.0} for _ in images]
-
-            scene_categories = [
-                "indoor scene", "outdoor scene", "landscape", "cityscape",
-                "portrait photo", "nature photo", "food photo", "night photo"
-            ]
-
-            from transformers import CLIPProcessor
-
-            # Process batch
-            inputs = self._clip_processor(
-                text=scene_categories,
-                images=images,
-                return_tensors="pt",
-                padding=True
-            ).to(self.device)
-
-            # Use TensorRT model if available
-            model = self._clip_trt if self._clip_trt is not None else self._clip_model
-
-            with torch.no_grad():
-                # Enable TF32 for better performance on Ampere+ (RTX 2080 Ti uses Tensor Cores)
-                with torch.cuda.amp.autocast(enabled=True):
-                    outputs = model(**inputs)
-                    logits = outputs.logits_per_image
-                    probs = logits.softmax(dim=1).cpu().numpy()
-
-            # Parse results
-            for prob in probs:
-                top_idx = np.argmax(prob)
-                results.append({
-                    "primary_scene": scene_categories[top_idx],
-                    "scene_confidence": float(prob[top_idx]),
-                })
-
-        except Exception as e:
-            results = [{"scene_error": str(e)} for _ in images]
-
-        return results
+            print(f"TensorRT compilation failed: {e}")
+            print("Falling back to standard PyTorch inference")
+            self._tensorrt_detr = None
 
     def _detect_objects_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
-        """TensorRT-optimized batch object detection."""
+        """
+        Batch object detection using DETR with TensorRT optimization (implements abstract method).
+
+        Args:
+            images: List of PIL images
+
+        Returns:
+            List of detection results with objects, counts, etc.
+        """
         results = []
 
         try:
+            # Lazy load DETR model
             if self._detr_model is None:
-                self._load_detr_model()
+                self._load_detection_model()
 
-            # Process each image (DETR batch processing complex)
+            # Graceful degradation if loading failed
+            if self._detr_model == "FAILED":
+                return [{"object_error": "DETR model failed to load"} for _ in images]
+
+            # Use TensorRT model if available, otherwise use standard DETR
+            model_to_use = self._tensorrt_detr if self._tensorrt_detr is not None else self._detr_model
+
+            # Process each image (DETR doesn't batch well due to varying sizes)
             for image in images:
-                result = self._detect_objects(image)
+                result = self._detect_objects_single(image, model_to_use)
                 results.append(result)
 
         except Exception as e:
@@ -332,19 +159,27 @@ class TensorRTVisionAnalyzer:
 
         return results
 
-    def _detect_objects(self, image: Image.Image) -> Dict[str, Any]:
-        """Detect objects with TensorRT optimization."""
-        try:
-            if self._detr_model is None:
-                self._load_detr_model()
+    def _detect_objects_single(self, image: Image.Image, model) -> Dict[str, Any]:
+        """
+        Detect objects in single image using DETR.
 
+        Args:
+            image: PIL Image
+            model: DETR model (either TensorRT or standard)
+
+        Returns:
+            Detection results dictionary
+        """
+        try:
+            # Prepare inputs
             inputs = self._detr_processor(images=image, return_tensors="pt").to(self.device)
 
-            # Use TensorRT model if available
-            model = self._detr_trt if self._detr_trt is not None else self._detr_model
-
+            # Get predictions with optional AMP
             with torch.no_grad():
-                with torch.cuda.amp.autocast(enabled=True):
+                if self.use_amp and self.device.type == "cuda":
+                    with torch.cuda.amp.autocast():
+                        outputs = model(**inputs)
+                else:
                     outputs = model(**inputs)
 
             # Process outputs
@@ -366,6 +201,8 @@ class TensorRTVisionAnalyzer:
                         "object": label_name,
                         "confidence": score_value,
                     })
+
+                    # Count objects
                     object_counts[label_name] = object_counts.get(label_name, 0) + 1
 
             return {
@@ -378,92 +215,69 @@ class TensorRTVisionAnalyzer:
         except Exception as e:
             return {"object_error": str(e)}
 
-    def _load_clip_model(self):
-        """Load CLIP model and optionally compile to TensorRT."""
-        try:
-            from transformers import CLIPProcessor, CLIPModel
+    def analyze_batch(self, image_paths: List[str], show_progress: bool = True) -> List[Dict[str, Any]]:
+        """
+        Analyze multiple images with TensorRT-optimized batch processing.
 
-            print(f"Loading CLIP model: {self.scene_model_name}")
+        Args:
+            image_paths: List of image file paths
+            show_progress: Show progress bar
 
-            try:
-                self._clip_processor = CLIPProcessor.from_pretrained(self.scene_model_name)
-                self._clip_model = CLIPModel.from_pretrained(
-                    self.scene_model_name,
-                    use_safetensors=True
-                ).to(self.device)
-                self._clip_model.eval()
-                print("CLIP model loaded successfully (safetensors)")
+        Returns:
+            List of analysis results
+        """
+        results = []
+        monitor = self.gpu_monitor
 
-                # Compile to TensorRT if enabled
-                if self.use_tensorrt and self.tensorrt_available:
-                    # Note: CLIP TensorRT compilation is complex due to variable input shapes
-                    # For now, use PyTorch with AMP (automatic mixed precision)
-                    print("Using PyTorch AMP for CLIP (TensorRT compilation complex for variable shapes)")
-                    self._clip_trt = None
-
-            except Exception as e:
-                print(f"Safetensors load failed: {e}")
-                self._clip_processor = CLIPProcessor.from_pretrained(self.scene_model_name)
-                self._clip_model = CLIPModel.from_pretrained(self.scene_model_name).to(self.device)
-                self._clip_model.eval()
-                print("CLIP model loaded successfully")
-
-        except Exception as e:
-            print(f"Failed to load CLIP model: {e}")
-            self._clip_model = "FAILED"
-            self._clip_processor = None
-
-    def _load_detr_model(self):
-        """Load DETR model and optionally compile to TensorRT."""
-        try:
-            from transformers import DetrImageProcessor, DetrForObjectDetection
-
-            print(f"Loading DETR model: {self.object_model_name}")
-            self._detr_processor = DetrImageProcessor.from_pretrained(self.object_model_name)
-            self._detr_model = DetrForObjectDetection.from_pretrained(self.object_model_name).to(self.device)
-            self._detr_model.eval()
-            print("DETR model loaded successfully")
-
-            # Compile to TensorRT if enabled
-            if self.use_tensorrt and self.tensorrt_available:
-                # DETR TensorRT compilation also complex - use AMP for now
-                print("Using PyTorch AMP for DETR (TensorRT full integration planned)")
-                self._detr_trt = None
-
-        except Exception as e:
-            print(f"Failed to load DETR model: {e}")
-            raise
-
-    def _generate_tags(self, scene_data: Dict, object_data: Dict) -> List[str]:
-        """Generate comprehensive tags."""
-        tags = set()
-
-        if "primary_scene" in scene_data and scene_data["primary_scene"] != "unknown":
-            scene = scene_data["primary_scene"].replace(" scene", "").replace(" photo", "")
-            tags.add(scene)
-
-        if "unique_objects" in object_data:
-            for obj in object_data["unique_objects"][:10]:
-                tags.add(obj)
-
-        if not tags and "object_count" in object_data and object_data["object_count"] > 0:
-            tags.add("photo")
-
-        return sorted(list(tags))
-
-    def get_memory_usage(self) -> Dict[str, float]:
-        """Get GPU memory usage."""
-        memory_info = {}
-
+        # Start GPU monitoring
         if self.device.type == "cuda":
-            memory_info["gpu_allocated_gb"] = torch.cuda.memory_allocated() / 1e9
-            memory_info["gpu_reserved_gb"] = torch.cuda.memory_reserved() / 1e9
-            memory_info["gpu_max_allocated_gb"] = torch.cuda.max_memory_allocated() / 1e9
+            monitor.start()
 
-        return memory_info
+        # Calculate batches
+        total_batches = (len(image_paths) + self.batch_size - 1) // self.batch_size
 
-    def clear_cache(self):
-        """Clear GPU cache."""
+        # Process in batches
+        iterator = range(0, len(image_paths), self.batch_size)
+        if show_progress:
+            iterator = tqdm(
+                iterator,
+                total=total_batches,
+                desc="Analyzing (TensorRT)",
+                unit="batch"
+            )
+
+        for i in iterator:
+            batch_paths = image_paths[i:i + self.batch_size]
+            batch_images = []
+
+            # Load batch of images
+            for path in batch_paths:
+                try:
+                    img = Image.open(path).convert("RGB")
+                    batch_images.append(img)
+                except Exception as e:
+                    results.append({"error": f"Failed to load {path}: {e}"})
+
+            if not batch_images:
+                continue
+
+            # Scene classification (uses base class method with AMP)
+            scene_results = self._classify_scene_batch(batch_images, use_amp=self.use_amp)
+
+            # Object detection (TensorRT-optimized)
+            object_results = self._detect_objects_batch(batch_images)
+
+            # Merge results
+            for scene_res, obj_res in zip(scene_results, object_results):
+                combined = {**scene_res, **obj_res}
+                results.append(combined)
+
+        # Stop GPU monitoring
         if self.device.type == "cuda":
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
+            monitor.stop()
+
+        return results
+
+
+# Backwards compatibility: keep old name as alias
+TensorRTVisionAnalyzer_Legacy = TensorRTVisionAnalyzer

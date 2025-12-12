@@ -1,11 +1,11 @@
 """YOLOv8-optimized ML vision analysis for 3-5x faster object detection.
 
 This module provides GPU-accelerated vision analysis with Ultralytics YOLOv8.
-Combines CLIP for scene classification with YOLOv8 for object detection.
+Combines CLIP for scene classification (from base class) with YOLOv8 for object detection.
 
 Key Features:
 - YOLOv8 object detection (3-5x faster than DETR)
-- CLIP scene classification (unchanged)
+- CLIP scene classification (inherited from BaseMLAnalyzer)
 - FP16 precision with AMP for additional speedup
 - Optimized batch processing
 - GPU memory efficient
@@ -15,20 +15,13 @@ import torch
 from PIL import Image
 import numpy as np
 from typing import Dict, Any, List, Optional
-from pathlib import Path
-import warnings
 from tqdm import tqdm
-import sys
-import os
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.gpu_monitor import get_monitor
-
-warnings.filterwarnings('ignore')
+from .base_ml_analyzer import BaseMLAnalyzer
+from ..interfaces.monitors import GPUMonitor
 
 
-class YOLOVisionAnalyzer:
+class YOLOVisionAnalyzer(BaseMLAnalyzer):
     """YOLOv8-optimized ML vision analyzer for maximum object detection performance."""
 
     def __init__(
@@ -39,6 +32,7 @@ class YOLOVisionAnalyzer:
         yolo_model: str = "yolov8n.pt",  # n=nano, s=small, m=medium, l=large, x=xlarge
         min_confidence: float = 0.6,
         precision: str = "fp16",
+        gpu_monitor: Optional[GPUMonitor] = None,
     ):
         """
         Initialize YOLO-optimized vision analyzer.
@@ -50,67 +44,33 @@ class YOLOVisionAnalyzer:
             yolo_model: YOLO model variant (yolov8n.pt to yolov8x.pt)
             min_confidence: Confidence threshold for detections
             precision: Precision mode ("fp16" or "fp32")
+            gpu_monitor: Optional GPU monitor for tracking (defaults to global instance)
         """
-        self.device = self._setup_device(use_gpu)
-        self.batch_size = batch_size
-        self.min_confidence = min_confidence
+        # Initialize base class (handles device, CLIP, monitoring)
+        super().__init__(
+            use_gpu=use_gpu,
+            batch_size=batch_size,
+            scene_model=scene_model,
+            min_confidence=min_confidence,
+            gpu_monitor=gpu_monitor,
+        )
+
+        # YOLO-specific configuration
         self.precision = precision
         self.use_amp = precision == "fp16"
-
-        # Model cache
-        self._clip_model = None
-        self._clip_processor = None
-        self._yolo_model = None
-
-        self.scene_model_name = scene_model
         self.yolo_model_name = yolo_model
+
+        # YOLO model cache
+        self._yolo_model = None
 
         print(f"YOLO ML Analyzer initialized on device: {self.device}")
         print(f"Batch size: {batch_size}")
         print(f"Precision: {precision} (AMP: {self.use_amp})")
         print(f"YOLO variant: {yolo_model}")
 
-    def _setup_device(self, use_gpu: bool) -> torch.device:
-        """Setup computation device."""
-        if use_gpu and torch.cuda.is_available():
-            device = torch.device("cuda")
-            print(f"GPU detected: {torch.cuda.get_device_name(0)}")
-            print(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
-        else:
-            device = torch.device("cpu")
-            if use_gpu:
-                print("WARNING: GPU requested but not available. Using CPU.")
-            else:
-                print("Using CPU for inference")
-        return device
-
-    def _load_clip_model(self):
-        """Load CLIP model for scene classification."""
-        try:
-            from transformers import CLIPProcessor, CLIPModel
-
-            print(f"Loading CLIP model: {self.scene_model_name}")
-
-            try:
-                self._clip_processor = CLIPProcessor.from_pretrained(self.scene_model_name)
-                self._clip_model = CLIPModel.from_pretrained(
-                    self.scene_model_name,
-                    use_safetensors=True
-                ).to(self.device)
-                self._clip_model.eval()
-                print("CLIP model loaded successfully (safetensors)")
-
-            except Exception as e:
-                # Fallback without safetensors
-                print(f"Safetensors load failed, trying regular loading: {e}")
-                self._clip_processor = CLIPProcessor.from_pretrained(self.scene_model_name)
-                self._clip_model = CLIPModel.from_pretrained(self.scene_model_name).to(self.device)
-                self._clip_model.eval()
-                print("CLIP model loaded successfully (regular)")
-
-        except Exception as e:
-            print(f"ERROR: Failed to load CLIP model: {e}")
-            self._clip_model = "FAILED"
+    def _load_detection_model(self):
+        """Load YOLOv8 model for object detection (implements abstract method)."""
+        self._load_yolo_model()
 
     def _load_yolo_model(self):
         """Load YOLOv8 model for object detection."""
@@ -132,65 +92,24 @@ class YOLOVisionAnalyzer:
             print(f"ERROR: Failed to load YOLO model: {e}")
             self._yolo_model = "FAILED"
 
-    def _classify_scene_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
-        """Classify scenes using CLIP with AMP optimization."""
-        results = []
-
-        try:
-            if self._clip_model is None:
-                self._load_clip_model()
-
-            if self._clip_model == "FAILED":
-                return [{"primary_scene": "unknown", "scene_scores": {}} for _ in images]
-
-            # Scene categories
-            scene_labels = [
-                "indoor", "outdoor", "nature", "city", "landscape",
-                "portrait", "food", "animal", "vehicle", "architecture",
-                "beach", "mountain", "forest", "sunset", "night",
-                "party", "sports", "concert", "travel", "selfie"
-            ]
-
-            # Process batch
-            inputs = self._clip_processor(
-                text=scene_labels,
-                images=images,
-                return_tensors="pt",
-                padding=True
-            ).to(self.device)
-
-            model = self._clip_model
-
-            with torch.no_grad():
-                # Enable AMP for FP16 if configured
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
-                    outputs = model(**inputs)
-                    logits = outputs.logits_per_image
-                    probs = logits.softmax(dim=1).cpu().numpy()
-
-            # Extract results for each image
-            for prob in probs:
-                scene_scores = {label: float(score) for label, score in zip(scene_labels, prob)}
-                primary_scene = max(scene_scores, key=scene_scores.get)
-                results.append({
-                    "primary_scene": primary_scene,
-                    "scene_scores": scene_scores,
-                    "scene_confidence": scene_scores[primary_scene],
-                })
-
-        except Exception as e:
-            results = [{"scene_error": str(e)} for _ in images]
-
-        return results
-
     def _detect_objects_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
-        """Batch object detection using YOLOv8."""
+        """
+        Batch object detection using YOLOv8 (implements abstract method).
+
+        Args:
+            images: List of PIL images
+
+        Returns:
+            List of detection results with objects, counts, etc.
+        """
         results = []
 
         try:
+            # Lazy load YOLO model
             if self._yolo_model is None:
                 self._load_yolo_model()
 
+            # Graceful degradation if loading failed
             if self._yolo_model == "FAILED":
                 return [{"object_error": "YOLO model failed to load"} for _ in images]
 
@@ -248,38 +167,13 @@ class YOLOVisionAnalyzer:
 
         return results
 
-    def analyze(self, image_path: str) -> Dict[str, Any]:
-        """
-        Analyze single image.
-
-        Args:
-            image_path: Path to image file
-
-        Returns:
-            Analysis results with scenes and objects
-        """
-        try:
-            image = Image.open(image_path).convert("RGB")
-
-            # Classify scene
-            scene_result = self._classify_scene_batch([image])[0]
-
-            # Detect objects
-            object_result = self._detect_objects_batch([image])[0]
-
-            # Combine results
-            return {**scene_result, **object_result}
-
-        except Exception as e:
-            return {"error": str(e)}
-
     def analyze_batch(
         self,
         image_paths: List[str],
         show_progress: bool = True
     ) -> List[Dict[str, Any]]:
         """
-        Batch analyze images with GPU optimization.
+        Batch analyze images with YOLO-optimized GPU processing.
 
         Args:
             image_paths: List of image file paths
@@ -287,9 +181,11 @@ class YOLOVisionAnalyzer:
 
         Returns:
             List of analysis results
+
+        Overrides base class to provide YOLO-specific batch optimization.
         """
         results = []
-        monitor = get_monitor()
+        monitor = self.gpu_monitor
 
         # Start GPU monitoring
         if self.device.type == "cuda":
@@ -298,76 +194,47 @@ class YOLOVisionAnalyzer:
         # Process in batches
         total_batches = (len(image_paths) + self.batch_size - 1) // self.batch_size
 
-        with tqdm(total=len(image_paths), desc="YOLO ML Analysis", unit="img",
-                  disable=not show_progress, ncols=120,
-                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}') as pbar:
+        iterator = range(0, len(image_paths), self.batch_size)
+        if show_progress:
+            iterator = tqdm(
+                iterator,
+                total=total_batches,
+                desc="Analyzing images (YOLO)",
+                unit="batch"
+            )
 
-            for i in range(0, len(image_paths), self.batch_size):
-                batch_paths = image_paths[i:i + self.batch_size]
+        for i in iterator:
+            batch_paths = image_paths[i:i + self.batch_size]
+            batch_images = []
 
-                # Load images
-                batch_images = []
-                for path in batch_paths:
-                    try:
-                        img = Image.open(path).convert("RGB")
-                        batch_images.append(img)
-                    except Exception as e:
-                        batch_images.append(None)
+            # Load batch of images
+            for path in batch_paths:
+                try:
+                    img = Image.open(path).convert("RGB")
+                    batch_images.append(img)
+                except Exception as e:
+                    results.append({"error": f"Failed to load {path}: {e}"})
 
-                # Process valid images
-                valid_images = [img for img in batch_images if img is not None]
+            if not batch_images:
+                continue
 
-                if valid_images:
-                    # Scene classification
-                    scene_results = self._classify_scene_batch(valid_images)
+            # Scene classification (uses base class method with AMP)
+            scene_results = self._classify_scene_batch(batch_images, use_amp=self.use_amp)
 
-                    # Object detection
-                    object_results = self._detect_objects_batch(valid_images)
+            # Object detection (YOLO-specific)
+            object_results = self._detect_objects_batch(batch_images)
 
-                    # Combine results
-                    valid_idx = 0
-                    for img in batch_images:
-                        if img is not None:
-                            combined = {**scene_results[valid_idx], **object_results[valid_idx]}
-                            results.append(combined)
-                            valid_idx += 1
-                        else:
-                            results.append({"error": "Failed to load image"})
+            # Merge results
+            for scene_res, obj_res in zip(scene_results, object_results):
+                combined = {**scene_res, **obj_res}
+                results.append(combined)
 
-                # Update progress bar
-                status_parts = []
-                if results and "primary_scene" in results[-1]:
-                    status_parts.append(f"Scene: {results[-1]['primary_scene']}")
-                if self.device.type == "cuda":
-                    status_parts.append(monitor.get_status_string())
-
-                pbar.set_postfix_str(" | ".join(status_parts))
-                pbar.update(len(batch_paths))
-
-        # Stop monitoring and show stats
+        # Stop GPU monitoring
         if self.device.type == "cuda":
-            print()
-            monitor.print_stats()
             monitor.stop()
 
         return results
 
-    def clear_cache(self):
-        """Clear GPU memory cache."""
-        if self.device.type == "cuda":
-            torch.cuda.empty_cache()
 
-    def get_memory_usage(self) -> Optional[Dict[str, float]]:
-        """Get current GPU memory usage."""
-        if self.device.type == "cuda":
-            allocated = torch.cuda.memory_allocated() / 1e9
-            reserved = torch.cuda.memory_reserved() / 1e9
-            total = torch.cuda.get_device_properties(0).total_memory / 1e9
-
-            return {
-                "allocated_gb": allocated,
-                "reserved_gb": reserved,
-                "total_gb": total,
-                "utilization": (allocated / total) * 100,
-            }
-        return None
+# Backwards compatibility: keep old name as alias
+YOLOVisionAnalyzer_Legacy = YOLOVisionAnalyzer

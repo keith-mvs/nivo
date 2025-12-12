@@ -76,18 +76,18 @@ tagging:
   # Write tags to EXIF/IPTC
   embed_tags: true
 
-  # Tag categories to include
+  # Tag categories to include (dict format: category_name: enabled)
   categories:
-    - scene  # indoor, outdoor, landscape, portrait, etc.
-    - objects  # detected objects
-    - quality  # quality scores
-    - location  # from GPS if available
-    - datetime  # normalized date/time
+    scene: true      # indoor, outdoor, landscape, portrait, etc.
+    objects: true    # detected objects
+    quality: true    # quality scores
+    location: true   # from GPS if available
+    datetime: true   # normalized date/time
 
-  # IPTC fields to populate
+  # IPTC fields to populate (dict format: field_name: enabled)
   iptc_fields:
-    keywords: true  # Write to IPTC keywords
-    caption: true  # Generate caption from tags
+    keywords: true   # Write to IPTC keywords
+    caption: true    # Generate caption from tags
 
   # Tag confidence threshold
   min_confidence: 0.6

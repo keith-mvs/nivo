@@ -27,6 +27,11 @@ venv/
 env/
 ENV/
 
+# Conda
+environment-lock.yml
+.conda/
+venv-backup-*/
+
 # IDE
 .vscode/
 .idea/

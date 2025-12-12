@@ -3,16 +3,12 @@
 import os
 from pathlib import Path
 from typing import List, Dict, Optional, Any
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import json
-from tqdm import tqdm
 
 from .utils.config import Config
 from .utils.image_io import is_supported_image
-from .utils.gpu_monitor import get_monitor
-from .analyzers.metadata import MetadataExtractor
-from .analyzers.content import ContentAnalyzer
-from .analyzers.ml_vision import MLVisionAnalyzer
+from .factories.analyzer_factory import AnalyzerFactory
+from .pipeline.analysis_pipeline import AnalysisPipeline
 from .processors.deduplicator import Deduplicator
 from .processors.renamer import ImageRenamer
 from .processors.tagger import MetadataTagger
@@ -31,70 +27,27 @@ class ImageEngine:
         """
         self.config = Config(config_path)
 
-        # Initialize components
+        # Initialize components using factory pattern
         self._init_analyzers()
         self._init_processors()
 
     def _init_analyzers(self):
-        """Initialize analysis components."""
-        # Metadata extractor (always enabled)
-        self.metadata_extractor = MetadataExtractor()
+        """Initialize analysis components using factory pattern."""
+        factory = AnalyzerFactory(self.config)
+        analyzers = factory.create_all_analyzers()
 
-        # Content analyzer
-        if self.config.get("analysis.content_analysis"):
-            num_workers = self.config.get("processing.max_workers", 4)
-            self.content_analyzer = ContentAnalyzer(num_workers=num_workers)
-        else:
-            self.content_analyzer = None
+        # Store analyzers for backwards compatibility
+        self.metadata_extractor = analyzers['metadata']
+        self.content_analyzer = analyzers['content']
+        self.ml_analyzer = analyzers['ml']
 
-        # ML analyzer
-        if self.config.get("analysis.ml_analysis"):
-            ml_config = self.config.get("analysis.ml_models", {})
-            # Ensure ml_config is a dict
-            if not isinstance(ml_config, dict):
-                ml_config = {}
-
-            # Check if YOLO optimization is enabled (highest priority)
-            use_yolo = ml_config.get("use_yolo", False)
-
-            if use_yolo:
-                # Use YOLOv8-optimized analyzer (3-5x faster object detection)
-                from .analyzers.ml_vision_yolo import YOLOVisionAnalyzer
-                self.ml_analyzer = YOLOVisionAnalyzer(
-                    use_gpu=ml_config.get("use_gpu", True),
-                    batch_size=ml_config.get("batch_size", 16),
-                    scene_model=ml_config.get("scene_detection", "openai/clip-vit-base-patch32"),
-                    yolo_model=ml_config.get("yolo_model", "yolov8n.pt"),
-                    precision=ml_config.get("tensorrt_precision", "fp16"),
-                    min_confidence=self.config.get("tagging.min_confidence", 0.6),
-                )
-            else:
-                # Check if TensorRT optimization is enabled
-                use_tensorrt = ml_config.get("use_tensorrt", False)
-
-                if use_tensorrt:
-                    # Use TensorRT-optimized analyzer
-                    from .analyzers.ml_vision_tensorrt import TensorRTVisionAnalyzer
-                    self.ml_analyzer = TensorRTVisionAnalyzer(
-                        use_gpu=ml_config.get("use_gpu", True),
-                        batch_size=ml_config.get("batch_size", 16),
-                        scene_model=ml_config.get("scene_detection", "openai/clip-vit-base-patch32"),
-                        object_model=ml_config.get("object_detection", "facebook/detr-resnet-50"),
-                        use_tensorrt=True,
-                        precision=ml_config.get("tensorrt_precision", "fp16"),
-                        min_confidence=self.config.get("tagging.min_confidence", 0.6),
-                    )
-                else:
-                    # Use standard PyTorch analyzer
-                    self.ml_analyzer = MLVisionAnalyzer(
-                        use_gpu=ml_config.get("use_gpu", True),
-                        batch_size=ml_config.get("batch_size", 8),
-                        scene_model=ml_config.get("scene_detection", "openai/clip-vit-base-patch32"),
-                        object_model=ml_config.get("object_detection", "facebook/detr-resnet-50"),
-                        min_confidence=self.config.get("tagging.min_confidence", 0.6),
-                    )
-        else:
-            self.ml_analyzer = None
+        # Create analysis pipeline
+        self.analysis_pipeline = AnalysisPipeline(
+            metadata_extractor=self.metadata_extractor,
+            content_analyzer=self.content_analyzer,
+            ml_analyzer=self.ml_analyzer,
+            config=self.config,
+        )
 
     def _init_processors(self):
         """Initialize processing components."""
@@ -203,131 +156,11 @@ class ImageEngine:
         Returns:
             List of combined analysis results
         """
-        print(f"\n=== Analyzing {len(image_paths)} images ===")
-
-        # Show GPU status if ML analysis is enabled
-        if self.ml_analyzer and self.ml_analyzer.device.type == "cuda":
-            import torch
-            print(f"GPU: {torch.cuda.get_device_name(0)}")
-            print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-        print()
-
-        results = []
-
-        # Phase 1: Metadata extraction (CPU-bound, parallel)
-        print("Phase 1/3: Extracting metadata...")
-        metadata_results = []
-        with ThreadPoolExecutor(max_workers=self.config.get("processing.max_workers", 4)) as executor:
-            futures = {executor.submit(self.metadata_extractor.extract, path): path for path in image_paths}
-
-            with tqdm(total=len(image_paths), desc="Metadata", unit="img", ncols=100) as pbar:
-                for future in as_completed(futures):
-                    try:
-                        result = future.result()
-                        metadata_results.append(result)
-                        # Show current file being processed
-                        if "file_name" in result:
-                            pbar.set_postfix_str(f"Current: {result['file_name'][:40]}")
-                    except Exception as e:
-                        metadata_results.append({"error": str(e)})
-                    pbar.update(1)
-
-        # Phase 2: Content analysis (CPU-bound, parallel)
-        if self.content_analyzer:
-            print("\nPhase 2/3: Analyzing content (quality, blur, colors)...")
-            content_results = []
-            with ThreadPoolExecutor(max_workers=self.config.get("processing.max_workers", 4)) as executor:
-                futures = {executor.submit(self.content_analyzer.analyze, path): path for path in image_paths}
-
-                with tqdm(total=len(image_paths), desc="Content", unit="img", ncols=100) as pbar:
-                    for future in as_completed(futures):
-                        try:
-                            result = future.result()
-                            content_results.append(result)
-                            # Show quality score if available
-                            if "quality_score" in result:
-                                pbar.set_postfix_str(f"Quality: {result['quality_score']:.1f}/100")
-                        except Exception as e:
-                            content_results.append({"error": str(e)})
-                        pbar.update(1)
-        else:
-            content_results = [{}] * len(image_paths)
-
-        # Phase 3: ML analysis (GPU-accelerated batch processing)
-        if self.ml_analyzer:
-            device_type = "GPU" if self.ml_analyzer.device.type == "cuda" else "CPU"
-            print(f"\nPhase 3/3: ML Analysis ({device_type}-accelerated scene/object detection)...")
-
-            # Start GPU monitoring for non-batch mode
-            monitor = get_monitor()
-            if not use_batch and self.ml_analyzer.device.type == "cuda":
-                monitor.start()
-
-            if use_batch:
-                ml_results = self.ml_analyzer.analyze_batch(image_paths, show_progress=True)
-            else:
-                ml_results = []
-                with tqdm(total=len(image_paths), desc="ML Analysis", unit="img", ncols=120,
-                         bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}') as pbar:
-                    for path in image_paths:
-                        result = self.ml_analyzer.analyze(path)
-                        ml_results.append(result)
-
-                        # Build status string
-                        status_parts = []
-                        if "primary_scene" in result:
-                            status_parts.append(f"Scene: {result['primary_scene']}")
-                        if self.ml_analyzer.device.type == "cuda":
-                            status_parts.append(monitor.get_status_string())
-
-                        pbar.set_postfix_str(" | ".join(status_parts))
-                        pbar.update(1)
-
-                # Show final GPU stats
-                if self.ml_analyzer.device.type == "cuda":
-                    print()
-                    monitor.print_stats()
-                    monitor.stop()
-
-            # Clear GPU cache
-            self.ml_analyzer.clear_cache()
-        else:
-            ml_results = [{}] * len(image_paths)
-
-        # Combine results
-        print("\nCombining analysis results...")
-        for metadata, content, ml in zip(metadata_results, content_results, ml_results):
-            combined = {**metadata, **content, **ml}
-            results.append(combined)
-
-        # Print summary statistics
-        print(f"\n{'='*60}")
-        print(f"✓ Analysis Complete: {len(results)} images processed")
-
-        # Calculate statistics
-        if results:
-            errors = sum(1 for r in results if "error" in r)
-            if errors:
-                print(f"  ⚠ Errors: {errors} images")
-
-            # Quality stats
-            if content_results and any("quality_score" in r for r in content_results):
-                quality_scores = [r["quality_score"] for r in content_results if "quality_score" in r]
-                avg_quality = sum(quality_scores) / len(quality_scores)
-                print(f"  📊 Average quality: {avg_quality:.1f}/100")
-
-            # Scene stats
-            if ml_results and any("primary_scene" in r for r in ml_results):
-                scenes = {}
-                for r in ml_results:
-                    if "primary_scene" in r:
-                        scene = r["primary_scene"]
-                        scenes[scene] = scenes.get(scene, 0) + 1
-                top_scenes = sorted(scenes.items(), key=lambda x: x[1], reverse=True)[:3]
-                print(f"  🎬 Top scenes: {', '.join(f'{s} ({c})' for s, c in top_scenes)}")
-
-        print(f"{'='*60}\n")
-        return results
+        return self.analysis_pipeline.run(
+            image_paths=image_paths,
+            use_batch=use_batch,
+            show_progress=True,
+        )
 
     def process_pipeline(
         self,
