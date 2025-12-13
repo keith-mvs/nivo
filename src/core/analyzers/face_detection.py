@@ -1,12 +1,11 @@
-"""Face detection and analysis module.
+"""Face detection and analysis module using InsightFace.
 
-Provides face detection, counting, and optional face encoding for recognition.
-Uses face_recognition library (dlib-based) for robust face detection.
+Provides face detection, counting, and face encoding for recognition.
+Uses InsightFace (ONNX-based) for robust, GPU-accelerated face detection.
 """
 
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
-from PIL import Image
 import numpy as np
 
 from ..interfaces.analyzers import ContentAnalyzer as AnalyzerInterface
@@ -14,109 +13,181 @@ from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Try to import face_recognition
+# Try to import insightface
 try:
-    import face_recognition
-    FACE_RECOGNITION_AVAILABLE = True
+    import insightface
+    from insightface.app import FaceAnalysis
+    INSIGHTFACE_AVAILABLE = True
 except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
-    logger.debug("face_recognition not installed - face detection disabled")
+    INSIGHTFACE_AVAILABLE = False
+    logger.debug("insightface not installed - face detection disabled")
 
 
 class FaceDetector:
     """
-    Face detection and analysis using dlib (via face_recognition library).
+    Face detection and analysis using InsightFace (ONNX runtime).
 
     Features:
     - Face detection with bounding boxes
     - Face count per image
-    - Optional face encoding for recognition/clustering
+    - Face encoding for recognition/clustering (128D embeddings)
     - Landmark detection (eyes, nose, mouth)
+    - GPU acceleration via ONNX runtime
     """
 
     def __init__(
         self,
-        model: str = "hog",
-        num_jitters: int = 1,
-        compute_encodings: bool = False,
+        model: str = "buffalo_sc",
+        compute_encodings: bool = True,
+        use_gpu: bool = True,
     ):
         """
         Initialize face detector.
 
         Args:
-            model: Detection model ("hog" for CPU, "cnn" for GPU - more accurate)
-            num_jitters: Number of times to re-sample face for encoding (higher = more accurate but slower)
-            compute_encodings: Whether to compute face encodings (128D vector per face)
+            model: Model name ("buffalo_l" for high accuracy, "buffalo_sc" for fast/small)
+            compute_encodings: Whether to compute face encodings (512D vector per face)
+            use_gpu: Whether to use GPU acceleration (requires CUDA)
         """
-        if not FACE_RECOGNITION_AVAILABLE:
-            logger.warning("face_recognition not installed. Install with: pip install face-recognition")
+        if not INSIGHTFACE_AVAILABLE:
+            logger.warning("insightface not installed. Install with: pip install insightface onnxruntime-gpu")
+            self.app = None
+            return
 
         self.model = model
-        self.num_jitters = num_jitters
         self.compute_encodings = compute_encodings
+        self.use_gpu = use_gpu
+
+        # Initialize InsightFace app
+        try:
+            self.app = FaceAnalysis(
+                name=model,
+                providers=['CUDAExecutionProvider', 'CPUExecutionProvider'] if use_gpu else ['CPUExecutionProvider']
+            )
+            self.app.prepare(ctx_id=0 if use_gpu else -1, det_size=(640, 640))
+            logger.debug(f"InsightFace initialized: model={model}, GPU={use_gpu}")
+        except Exception as e:
+            logger.error(f"Failed to initialize InsightFace: {e}")
+            self.app = None
+
+    def detect_faces_from_array(self, image_array: np.ndarray) -> Dict[str, Any]:
+        """
+        Detect faces in an image from numpy array.
+
+        Args:
+            image_array: RGB image as numpy array (H, W, 3)
+
+        Returns:
+            Dictionary with face detection results:
+            - face_count: Number of faces detected
+            - face_locations: List of bounding box dicts
+            - face_landmarks: List of landmark arrays (if available)
+            - face_encodings: List of 512D face embeddings (if enabled)
+            - has_faces: Boolean indicating if any faces found
+        """
+        if not INSIGHTFACE_AVAILABLE or self.app is None:
+            return {
+                "face_count": 0,
+                "face_locations": [],
+                "has_faces": False,
+                "error": "insightface not available",
+            }
+
+        try:
+            # InsightFace expects BGR format
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                # Convert RGB to BGR
+                bgr_array = image_array[:, :, ::-1]
+            else:
+                bgr_array = image_array
+
+            # Detect faces
+            faces = self.app.get(bgr_array)
+            face_count = len(faces)
+
+            result = {
+                "face_count": face_count,
+                "has_faces": face_count > 0,
+            }
+
+            # Extract face locations (bounding boxes)
+            face_locations = []
+            for face in faces:
+                bbox = face.bbox.astype(int)
+                # Convert from (x1, y1, x2, y2) to {left, top, right, bottom}
+                face_locations.append({
+                    "left": int(bbox[0]),
+                    "top": int(bbox[1]),
+                    "right": int(bbox[2]),
+                    "bottom": int(bbox[3]),
+                })
+            result["face_locations"] = face_locations
+
+            # Extract face landmarks (5 keypoints: left eye, right eye, nose, mouth_left, mouth_right)
+            if face_count > 0:
+                try:
+                    landmarks = []
+                    for face in faces:
+                        if hasattr(face, 'kps') and face.kps is not None:
+                            # kps is (5, 2) array of keypoints
+                            landmarks.append(face.kps.tolist())
+                    result["face_landmarks"] = landmarks
+                except Exception as e:
+                    logger.debug(f"Could not extract landmarks: {e}")
+
+            # Extract face encodings if requested
+            if self.compute_encodings and face_count > 0:
+                try:
+                    encodings = []
+                    for face in faces:
+                        if hasattr(face, 'embedding') and face.embedding is not None:
+                            # InsightFace provides 512D embeddings
+                            encodings.append(face.embedding.tolist())
+                    result["face_encodings"] = encodings
+                except Exception as e:
+                    logger.debug(f"Could not extract encodings: {e}")
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Error detecting faces: {e}")
+            return {
+                "face_count": 0,
+                "face_locations": [],
+                "has_faces": False,
+                "error": str(e),
+            }
 
     def detect_faces(self, image_path: str) -> Dict[str, Any]:
         """
-        Detect faces in an image.
+        Detect faces in an image file.
+
+        Note: For HEIC support, use detect_faces_from_array() with image_io.load_image()
 
         Args:
             image_path: Path to the image file
 
         Returns:
-            Dictionary with face detection results:
-            - face_count: Number of faces detected
-            - face_locations: List of (top, right, bottom, left) tuples
-            - face_landmarks: List of landmark dictionaries (if available)
-            - face_encodings: List of 128D face encodings (if enabled)
-            - has_faces: Boolean indicating if any faces found
+            Dictionary with face detection results
         """
-        if not FACE_RECOGNITION_AVAILABLE:
+        if not INSIGHTFACE_AVAILABLE or self.app is None:
             return {
                 "face_count": 0,
                 "face_locations": [],
                 "has_faces": False,
-                "error": "face_recognition not installed",
+                "error": "insightface not available",
             }
 
         try:
-            # Load image
-            image = face_recognition.load_image_file(image_path)
+            # Load image using OpenCV (BGR format)
+            import cv2
+            img = cv2.imread(image_path)
+            if img is None:
+                raise ValueError(f"Failed to load image: {image_path}")
 
-            # Detect face locations
-            face_locations = face_recognition.face_locations(image, model=self.model)
-            face_count = len(face_locations)
-
-            result = {
-                "face_count": face_count,
-                "face_locations": [
-                    {"top": t, "right": r, "bottom": b, "left": l}
-                    for t, r, b, l in face_locations
-                ],
-                "has_faces": face_count > 0,
-            }
-
-            # Get face landmarks (eyes, nose, mouth, etc.)
-            if face_count > 0:
-                try:
-                    face_landmarks_list = face_recognition.face_landmarks(image, face_locations)
-                    result["face_landmarks"] = face_landmarks_list
-                except Exception as e:
-                    logger.debug(f"Could not extract landmarks: {e}")
-
-            # Compute face encodings if requested
-            if self.compute_encodings and face_count > 0:
-                try:
-                    encodings = face_recognition.face_encodings(
-                        image,
-                        face_locations,
-                        num_jitters=self.num_jitters
-                    )
-                    # Convert numpy arrays to lists for JSON serialization
-                    result["face_encodings"] = [enc.tolist() for enc in encodings]
-                except Exception as e:
-                    logger.debug(f"Could not compute encodings: {e}")
-
-            return result
+            # Convert BGR to RGB for consistency
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            return self.detect_faces_from_array(img_rgb)
 
         except Exception as e:
             logger.warning(f"Error detecting faces in {image_path}: {e}")
@@ -152,40 +223,42 @@ class FaceDetector:
             result["file_path"] = path
             results.append(result)
 
-        total_faces = sum(r.get("face_count", 0) for r in results)
-        images_with_faces = sum(1 for r in results if r.get("has_faces", False))
-
-        logger.info(f"Face detection complete: {total_faces} faces in {images_with_faces}/{len(image_paths)} images")
-
         return results
 
     def compare_faces(
         self,
-        known_encoding: List[float],
-        unknown_encoding: List[float],
+        encoding1: List[float],
+        encoding2: List[float],
         tolerance: float = 0.6
     ) -> Tuple[bool, float]:
         """
         Compare two face encodings.
 
         Args:
-            known_encoding: Reference face encoding (128D list)
-            unknown_encoding: Face encoding to compare (128D list)
-            tolerance: Distance threshold for match (lower = stricter)
+            encoding1: First face encoding (512D vector)
+            encoding2: Second face encoding (512D vector)
+            tolerance: Similarity threshold (lower = more strict)
 
         Returns:
             Tuple of (is_match, distance)
         """
-        if not FACE_RECOGNITION_AVAILABLE:
+        if not INSIGHTFACE_AVAILABLE:
             return False, 1.0
 
-        known = np.array(known_encoding)
-        unknown = np.array(unknown_encoding)
+        try:
+            import numpy as np
+            enc1 = np.array(encoding1)
+            enc2 = np.array(encoding2)
 
-        distance = np.linalg.norm(known - unknown)
-        is_match = distance <= tolerance
+            # Compute cosine similarity
+            distance = 1 - np.dot(enc1, enc2) / (np.linalg.norm(enc1) * np.linalg.norm(enc2))
+            is_match = distance <= tolerance
 
-        return is_match, float(distance)
+            return is_match, float(distance)
+
+        except Exception as e:
+            logger.error(f"Error comparing faces: {e}")
+            return False, 1.0
 
     def cluster_faces(
         self,
@@ -193,90 +266,79 @@ class FaceDetector:
         tolerance: float = 0.6
     ) -> List[int]:
         """
-        Cluster face encodings into groups (same person).
+        Cluster face encodings by similarity.
 
         Args:
             encodings: List of face encodings
-            tolerance: Distance threshold for grouping
+            tolerance: Clustering threshold
 
         Returns:
             List of cluster labels (same label = same person)
         """
-        if not FACE_RECOGNITION_AVAILABLE or not encodings:
+        if not INSIGHTFACE_AVAILABLE or len(encodings) == 0:
             return []
 
-        # Convert to numpy
-        encoding_arrays = [np.array(enc) for enc in encodings]
+        try:
+            from sklearn.cluster import DBSCAN
+            import numpy as np
 
-        # Simple clustering using face_recognition
-        labels = face_recognition.cluster_faces(encoding_arrays, tolerance)
+            # Convert to numpy array
+            encodings_array = np.array(encodings)
 
-        return labels.tolist()
+            # Use DBSCAN for clustering
+            clusterer = DBSCAN(metric="cosine", eps=tolerance, min_samples=1)
+            labels = clusterer.fit_predict(encodings_array)
+
+            return labels.tolist()
+
+        except Exception as e:
+            logger.error(f"Error clustering faces: {e}")
+            return list(range(len(encodings)))  # Each face in own cluster
 
 
 class FaceAnalyzer(AnalyzerInterface):
     """
-    Analyzer interface wrapper for face detection.
-
-    Integrates face detection into the analysis pipeline.
+    Face analyzer for integration with analysis pipeline.
     """
 
     def __init__(
         self,
-        model: str = "hog",
+        model: str = "buffalo_sc",
         compute_encodings: bool = False,
+        use_gpu: bool = True
     ):
         """
         Initialize face analyzer.
 
         Args:
-            model: Detection model ("hog" or "cnn")
+            model: InsightFace model name
             compute_encodings: Whether to compute face encodings
+            use_gpu: Whether to use GPU acceleration
         """
         self.detector = FaceDetector(
             model=model,
             compute_encodings=compute_encodings,
+            use_gpu=use_gpu
         )
-        self.enabled = FACE_RECOGNITION_AVAILABLE
 
     def analyze(self, image_path: str) -> Dict[str, Any]:
         """
-        Analyze faces in an image.
+        Analyze image for faces.
 
         Args:
-            image_path: Path to the image file
+            image_path: Path to image file
 
         Returns:
-            Dictionary with face analysis results
+            Dictionary with "faces" key containing detection results
         """
-        if not self.enabled:
-            return {"faces": {"face_count": 0, "has_faces": False}}
-
         result = self.detector.detect_faces(image_path)
         return {"faces": result}
 
-    def analyze_batch(
-        self,
-        image_paths: List[str],
-        show_progress: bool = True
-    ) -> List[Dict[str, Any]]:
-        """
-        Analyze faces in multiple images.
-
-        Args:
-            image_paths: List of image file paths
-            show_progress: Show progress
-
-        Returns:
-            List of face analysis results
-        """
-        if not self.enabled:
-            return [{"faces": {"face_count": 0, "has_faces": False}} for _ in image_paths]
-
-        results = self.detector.detect_batch(image_paths, show_progress)
-        return [{"faces": r} for r in results]
-
 
 def is_available() -> bool:
-    """Check if face recognition is available."""
-    return FACE_RECOGNITION_AVAILABLE
+    """Check if InsightFace is available."""
+    return INSIGHTFACE_AVAILABLE
+
+
+# Alias for backward compatibility
+is_face_detection_available = is_available
