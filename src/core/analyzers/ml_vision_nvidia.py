@@ -218,18 +218,38 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
         Returns:
             Analysis results with NVIDIA-generated tags
         """
-        # Get base analysis (scene + objects)
-        base_result = super().analyze(image_path)
+        try:
+            # Load image
+            img = Image.open(image_path).convert('RGB')
 
-        # Add NVIDIA-specific enrichment: searchable tags
-        if self._vlm_model and self._vlm_model != "FAILED":
-            try:
-                tags = self._vlm_model.generate_searchable_tags(image_path)
-                base_result["ai_generated_tags"] = tags
-                logger.debug(f"Generated tags: {tags}")
-            except Exception as e:
-                logger.warning(f"Tag generation failed: {e}")
-                base_result["ai_generated_tags"] = []
+            # Scene classification via NVIDIA VLM
+            scene_result = self._classify_scene_batch([img])[0]
+
+            # Object detection via NVIDIA VLM
+            detection_result = self._detect_objects_batch([img])[0]
+
+            # Merge results
+            base_result = {**scene_result, **detection_result}
+
+            # Add NVIDIA-specific enrichment: searchable tags
+            if self._vlm_model and self._vlm_model != "FAILED":
+                try:
+                    tags = self._vlm_model.generate_searchable_tags(image_path)
+                    base_result["ai_generated_tags"] = tags
+                    logger.debug(f"Generated tags: {tags}")
+                except Exception as e:
+                    logger.warning(f"Tag generation failed: {e}")
+                    base_result["ai_generated_tags"] = []
+
+        except Exception as e:
+            logger.error(f"Analysis failed for {image_path}: {e}")
+            base_result = {
+                "file_path": image_path,
+                "error": str(e),
+                "primary_scene": "unknown",
+                "objects_detected": [],
+                "object_count": 0
+            }
 
         return base_result
 
