@@ -154,12 +154,12 @@ class TestCaptionGeneration:
         # High quality
         data = {"quality_score": 85}
         caption = tagger._generate_caption(data)
-        assert "high quality" in caption
+        assert "high quality" in caption.lower()
 
         # Good quality
         data = {"quality_score": 70}
         caption = tagger._generate_caption(data)
-        assert "good quality" in caption
+        assert "good quality" in caption.lower()
 
         # Low quality (no mention)
         data = {"quality_score": 40}

@@ -67,8 +67,8 @@ pictures_analysis*.json
 *.db
 *.db-journal
 
-# Models cache (HuggingFace)
-models/
+# Models cache (HuggingFace) - root level only
+/models/
 .cache/
 
 # Test files
