@@ -15,11 +15,10 @@ from .workflow_manager import (
     create_library_workflow,
 )
 from .performance_metrics import (
-    PerformanceTracker,
+    PerformanceMetrics,
     ModelMetrics,
     TimingRecord,
-    GPUMetrics,
-    get_tracker,
-    reset_tracker,
-    track_time,
+    MetricType,
+    get_metrics,
+    reset_metrics,
 )

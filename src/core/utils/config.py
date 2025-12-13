@@ -145,9 +145,12 @@ class Config:
         # Fallback to raw config
         return self._get_from_dict(key_path, default)
 
+    # Sentinel for cache-compatible None default
+    _NOT_FOUND = object()
+
     @lru_cache(maxsize=128)
-    def _get_from_dict(self, key_path: str, default: Any = None) -> Any:
-        """Cached helper for dictionary access."""
+    def _get_from_dict_cached(self, key_path: str) -> Any:
+        """Cached helper for dictionary access (returns _NOT_FOUND if missing)."""
         keys = key_path.split('.')
         value = self._raw_config
 
@@ -155,9 +158,16 @@ class Config:
             if isinstance(value, dict) and key in value:
                 value = value[key]
             else:
-                return default
+                return Config._NOT_FOUND
 
         return value
+
+    def _get_from_dict(self, key_path: str, default: Any = None) -> Any:
+        """Get value from dict with unhashable default support."""
+        result = self._get_from_dict_cached(key_path)
+        if result is Config._NOT_FOUND:
+            return default
+        return result
 
     def set(self, key_path: str, value: Any):
         """
@@ -178,7 +188,7 @@ class Config:
         config[keys[-1]] = value
 
         # Invalidate cache on set
-        self._get_from_dict.cache_clear()
+        self._get_from_dict_cached.cache_clear()
 
         # Re-validate if validation is enabled
         if self.validate and AppConfig is not None:
