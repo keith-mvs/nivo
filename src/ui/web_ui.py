@@ -110,12 +110,12 @@ def main():
 
     # Generate thumbnails
     with st.spinner("Generating thumbnails..."):
-        thumb_gen = ThumbnailGenerator(size=(256, 256))
+        thumb_gen = ThumbnailGenerator(size=(128, 128))
         image_paths = [img["file_path"] for img in filtered_data if "file_path" in img]
         thumbnails = thumb_gen.generate_batch(image_paths, show_progress=False)
 
-    # Display images in grid (3 columns)
-    cols_per_row = 3
+    # Display images in grid (5 columns)
+    cols_per_row = 5
     for i in range(0, len(filtered_data), cols_per_row):
         cols = st.columns(cols_per_row)
 
@@ -132,7 +132,7 @@ def main():
                 # Thumbnail
                 thumb_path = thumbnails.get(file_path)
                 if thumb_path and thumb_path.exists():
-                    st.image(str(thumb_path), use_container_width=True)
+                    st.image(str(thumb_path), width=128)
                 else:
                     st.info("No preview")
 

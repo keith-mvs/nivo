@@ -1,0 +1,145 @@
+# Image Engine - NVIDIA Build API Configuration
+# High-Quality Cloud-Based Vision Analysis
+
+# Analysis settings
+analysis:
+  # Enable different analysis levels
+  extract_metadata: true
+  content_analysis: true
+  ml_analysis: true
+
+  # SQLite cache for incremental analysis
+  use_cache: true
+  cache_path: null  # Default: .nivo_cache.db in working directory
+
+  # ML model configuration - NVIDIA BUILD API
+  ml_models:
+    # NVIDIA Build API (Priority 1)
+    use_nvidia: true               # Enable NVIDIA Build API (highest quality)
+    nvidia_model: "llama-vision"   # Options: "llama-vision" (Llama 3.2 11B), "nemotron" (Nemotron Nano 12B)
+    nvidia_api_key: null           # Optional: reads from NVIDIA_API_KEY env var if null
+
+    # Fallback options (if use_nvidia is false)
+    use_yolo: false                # YOLOv8 local GPU
+    use_tensorrt: false            # TensorRT optimization
+
+    # Batch size (API rate limiting)
+    batch_size: 8  # Lower for API calls to avoid rate limits
+
+    # Not used with NVIDIA API (cloud-based)
+    use_gpu: false
+    scene_detection: null  # NVIDIA VLM handles scene classification
+
+  # Quality thresholds
+  quality:
+    min_resolution: [640, 480]
+    blur_threshold: 100.0
+    jpeg_quality_threshold: 85
+
+# Deduplication settings
+deduplication:
+  hash_algorithm: "sha256"
+  check_perceptual: true  # Enabled for better duplicate detection
+  perceptual_threshold: 8  # Hamming distance (0-64, lower = more similar)
+  keep_strategy: "highest_quality"
+  safe_mode: true
+
+# Renaming settings
+renaming:
+  pattern: "{date}_{time}"
+  date_format: "%Y-%m-%d"
+  time_format: "%H%M%S"
+  datetime_format: "%Y-%m-%d_%H%M%S"
+  collision_suffix: "_{seq:03d}"
+  preserve_original: true
+  include_tags_in_filename: false
+  max_filename_length: 200
+
+# Format conversion settings
+formatting:
+  photo_format: "jpg"
+  graphic_format: "png"
+  jpeg_quality: 95
+  png_compression: 6
+  safe_conversion: true
+
+  supported_formats:
+    - jpg
+    - jpeg
+    - png
+    - heic
+    - heif
+    - webp
+    - bmp
+    - tiff
+    - raw
+    - cr2
+    - nef
+    - arw
+
+# Tag embedding settings
+tagging:
+  embed_tags: true
+  categories:
+    scene: true
+    objects: true
+    quality: true
+    location: true
+    datetime: true
+    caption: true
+  iptc_fields:
+    keywords: true
+    caption: true
+  min_confidence: 0.3  # Lower for VLM (more permissive)
+
+# Processing settings
+processing:
+  # Threading
+  max_workers: 4
+
+  # Batch processing
+  batch_size: 100
+
+  # Progress reporting
+  show_progress: true
+  verbose: false
+
+# Output settings
+output:
+  generate_report: true
+  report_format: "json"
+  log_level: "INFO"
+  log_file: "image_engine.log"
+
+  # Performance logging
+  log_performance_stats: true
+
+# Video support settings (Future)
+video:
+  enabled: false
+
+  # Frame extraction
+  extract_fps: 1
+  extraction_strategy: "adaptive"
+
+  # Analysis settings
+  analyze_frames: true
+  analyze_audio: false
+  action_recognition: false
+
+  # Performance
+  video_batch_size: 8
+  max_frames_per_video: 300
+
+  # Model configuration
+  action_model: "nvidia/tao/actionrecognitionnet"
+  clip_length: 16
+
+# Experimental features
+experimental:
+  # Segmentation support
+  enable_segmentation: false
+  segmentation_model: "nvidia/tao/segformer-b0"
+
+  # Model caching
+  cache_models: false  # Not applicable for cloud API

@@ -1,9 +1,10 @@
 """Factory for creating image analyzers based on configuration.
 
 Centralizes analyzer creation logic with priority-based selection:
-1. YOLO (fastest object detection, 3-5x speedup)
-2. TensorRT (2-4x speedup with FP16/INT8)
-3. Standard PyTorch (baseline DETR)
+1. NVIDIA Build API (cloud-based, highest quality tagging)
+2. YOLO (fastest local object detection, 3-5x speedup)
+3. TensorRT (2-4x speedup with FP16/INT8)
+4. Standard PyTorch (baseline DETR)
 """
 
 from typing import Optional
@@ -55,9 +56,10 @@ class AnalyzerFactory:
         Create ML analyzer with priority-based selection.
 
         Priority order:
-        1. YOLO (if use_yolo=true): YOLOVisionAnalyzer (3-5x faster)
-        2. TensorRT (if use_tensorrt=true): TensorRTVisionAnalyzer (2-4x faster)
-        3. Standard: MLVisionAnalyzer (baseline DETR)
+        1. NVIDIA Build API (if use_nvidia=true): NVIDIAVisionAnalyzer (cloud, highest quality)
+        2. YOLO (if use_yolo=true): YOLOVisionAnalyzer (3-5x faster)
+        3. TensorRT (if use_tensorrt=true): TensorRTVisionAnalyzer (2-4x faster)
+        4. Standard: MLVisionAnalyzer (baseline DETR)
 
         Args:
             gpu_monitor: Optional GPU monitor for dependency injection
@@ -81,16 +83,40 @@ class AnalyzerFactory:
             "gpu_monitor": gpu_monitor,
         }
 
-        # Priority 1: YOLO (fastest)
+        # Priority 1: NVIDIA Build API (highest quality)
+        if ml_config.get("use_nvidia", False):
+            return self._create_nvidia_analyzer(ml_config, common_params)
+
+        # Priority 2: YOLO (fastest local)
         if ml_config.get("use_yolo", False):
             return self._create_yolo_analyzer(ml_config, common_params)
 
-        # Priority 2: TensorRT (fast)
+        # Priority 3: TensorRT (fast local)
         if ml_config.get("use_tensorrt", False):
             return self._create_tensorrt_analyzer(ml_config, common_params)
 
-        # Priority 3: Standard DETR (baseline)
+        # Priority 4: Standard DETR (baseline)
         return self._create_standard_analyzer(ml_config, common_params)
+
+    def _create_nvidia_analyzer(self, ml_config: dict, common_params: dict):
+        """
+        Create NVIDIA Build API analyzer.
+
+        Args:
+            ml_config: ML models configuration
+            common_params: Common analyzer parameters
+
+        Returns:
+            NVIDIAVisionAnalyzer instance
+        """
+        from ..analyzers.ml_vision_nvidia import NVIDIAVisionAnalyzer
+
+        return NVIDIAVisionAnalyzer(
+            batch_size=ml_config.get("batch_size", 8),
+            model=ml_config.get("nvidia_model", "llama-vision"),
+            api_key=ml_config.get("nvidia_api_key"),  # Optional, reads from env if None
+            min_confidence=common_params["min_confidence"],
+        )
 
     def _create_yolo_analyzer(self, ml_config: dict, common_params: dict):
         """
