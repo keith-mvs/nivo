@@ -219,7 +219,7 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
             Analysis results with NVIDIA-generated tags
         """
         # Get base analysis (scene + objects)
-        base_result = super().analyze_image(image_path)
+        base_result = super().analyze(image_path)
 
         # Add NVIDIA-specific enrichment: searchable tags
         if self._vlm_model and self._vlm_model != "FAILED":
