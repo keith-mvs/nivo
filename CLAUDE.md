@@ -104,6 +104,97 @@ if self._clip_model == "FAILED":  # Sentinel value
 
 **Why**: PyTorch 2.5.1 blocks `pytorch_model.bin` (CVE-2025-32434). Uses safetensors first, sentinel prevents reload attempts.
 
+## Advanced Features
+
+### SQLite Analysis Cache (✓ Implemented)
+
+**File:** `src/core/database/analysis_cache.py`
+
+Incremental analysis with automatic cache invalidation:
+```python
+from src.core.database import get_cache
+
+cache = get_cache()  # Global singleton
+cached = cache.get_cached_batch(file_paths)  # {path: result}
+cache.cache_batch(analysis_results)  # Store new results
+stats = cache.get_stats()  # entries, size, hit rate
+```
+
+**Configuration:**
+```yaml
+analysis:
+  use_cache: true
+  cache_path: ".nivo_cache.db"  # or null for default
+```
+
+**Features:**
+- Fingerprint-based change detection (MD5 of path+size+mtime)
+- Automatic invalidation when files modified
+- Batch operations for efficiency
+- Typical speedup: 2-3x on subsequent runs with 60-90% hit rate
+
+### Face Detection & Recognition (✓ Implemented)
+
+**File:** `src/core/analyzers/face_detection.py`
+
+**Dependencies:** `dlib`, `face-recognition` (optional, installed)
+
+```python
+from src.core.analyzers import FaceDetector, is_face_detection_available
+
+if is_face_detection_available():
+    detector = FaceDetector(model="hog")  # or "cnn" for GPU
+    result = detector.detect_faces(image_path)
+    # Returns: {face_count, face_locations, has_faces, landmarks, encodings}
+
+    # Batch processing
+    results = detector.detect_batch(image_paths)
+
+    # Face comparison & clustering
+    is_match, distance = detector.compare_faces(enc1, enc2, tolerance=0.6)
+    labels = detector.cluster_faces(encodings, tolerance=0.6)
+```
+
+**Models:**
+- `hog`: CPU-based, ~100-200ms/image, good accuracy
+- `cnn`: GPU-based, ~50-100ms/image, excellent accuracy (requires CUDA)
+
+**Use Cases:**
+- People counting
+- Portrait detection for auto-cropping
+- Face clustering (group photos by person)
+- Privacy detection (blur faces)
+
+### Perceptual Duplicate Detection (✓ Implemented)
+
+**File:** `src/core/processors/deduplicator.py`
+
+Find visually similar images (not just byte-identical):
+```python
+from src.core.processors.deduplicator import Deduplicator
+
+dedup = Deduplicator()
+
+# Perceptual similarity
+similar_groups = dedup.find_similar(
+    file_paths=image_list,
+    threshold=8,           # Hamming distance (0=identical, 64=different)
+    hash_type="phash",     # phash, dhash, average_hash, whash
+    show_progress=True
+)
+# Returns: {"group_0": ["img1.jpg", "img2.jpg"], "group_1": [...]}
+
+# Exact duplicates (SHA256)
+exact_dupes = dedup.find_duplicates(file_paths)
+```
+
+**Threshold Guide:**
+- 0-4: Nearly identical (same shot, different compression)
+- 4-8: Very similar (burst mode, minor edits)
+- 8-12: Visually similar (same scene, different angle/time)
+
+**Algorithm:** Union-find clustering with parallel perceptual hashing
+
 ## Critical Technical Constraints
 
 ### Windows Unicode Filenames
