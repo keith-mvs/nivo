@@ -6,8 +6,11 @@ import requests
 import time
 from typing import Dict, Any, Optional
 from pathlib import Path
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class NVIDIABuildClient:
     """
     Base client for NVIDIA Build API.
@@ -63,7 +66,7 @@ class NVIDIABuildClient:
             # Wait until oldest request expires
             wait_time = 60 - (now - self.request_times[0])
             if wait_time > 0:
-                print(f"Rate limit reached. Waiting {wait_time:.1f}s...")
+                logger.info(f"Rate limit reached. Waiting {wait_time:.1f}s...")
                 time.sleep(wait_time)
                 self.request_times = []
 
@@ -132,11 +135,11 @@ class NVIDIABuildClient:
 
             except requests.exceptions.HTTPError as e:
                 if response.status_code == 429:  # Rate limit
-                    print(f"Rate limit hit (attempt {attempt + 1}/{retry_attempts})")
+                    logger.info(f"Rate limit hit (attempt {attempt + 1}/{retry_attempts})")
                     time.sleep(retry_delay * (attempt + 1))
                     continue
                 elif response.status_code >= 500:  # Server error
-                    print(f"Server error (attempt {attempt + 1}/{retry_attempts})")
+                    logger.error(f"Server error (attempt {attempt + 1}/{retry_attempts})")
                     time.sleep(retry_delay * (attempt + 1))
                     continue
                 else:
@@ -144,7 +147,7 @@ class NVIDIABuildClient:
                     raise
 
             except requests.exceptions.RequestException as e:
-                print(f"Request failed (attempt {attempt + 1}/{retry_attempts}): {e}")
+                logger.error(f"Request failed (attempt {attempt + 1}/{retry_attempts}): {e}")
                 if attempt < retry_attempts - 1:
                     time.sleep(retry_delay * (attempt + 1))
                     continue
@@ -168,5 +171,5 @@ class NVIDIABuildClient:
             )
             return response.status_code == 200
         except Exception as e:
-            print(f"Connection test failed: {e}")
+            logger.error(f"Connection test failed: {e}")
             return False

@@ -10,8 +10,11 @@ from ..utils.gpu_monitor import get_monitor
 from ..utils.progress_reporter import ProgressReporter, format_analysis_stats
 from ..analyzers.metadata import MetadataExtractor
 from ..analyzers.content import ContentAnalyzer
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class AnalysisPipeline:
     """
     Orchestrates 3-phase image analysis pipeline:
@@ -60,7 +63,7 @@ class AnalysisPipeline:
             List of combined analysis results
         """
         if show_progress:
-            print(f"\n=== Analyzing {len(image_paths)} images ===")
+            logger.info(f"=== Analyzing {len(image_paths)} images ===")
             self._print_gpu_info()
             print()
 
@@ -71,7 +74,7 @@ class AnalysisPipeline:
 
         # Combine results
         if show_progress:
-            print("\nCombining analysis results...")
+            logger.info("Combining analysis results...")
 
         results = []
         for metadata, content, ml in zip(metadata_results, content_results, ml_results):
@@ -88,8 +91,8 @@ class AnalysisPipeline:
         """Print GPU information if ML analysis is enabled."""
         if self.ml_analyzer and hasattr(self.ml_analyzer, 'device'):
             if self.ml_analyzer.device.type == "cuda":
-                print(f"GPU: {torch.cuda.get_device_name(0)}")
-                print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+                logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+                logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
     def _phase1_metadata(
         self,
@@ -107,7 +110,7 @@ class AnalysisPipeline:
             List of metadata dictionaries
         """
         if show_progress:
-            print("Phase 1/3: Extracting metadata...")
+            logger.info("Phase 1/3: Extracting metadata...")
 
         results = []
         max_workers = self.config.get("processing.max_workers", 4)
@@ -161,7 +164,7 @@ class AnalysisPipeline:
             return [{}] * len(image_paths)
 
         if show_progress:
-            print("\nPhase 2/3: Analyzing content (quality, blur, colors)...")
+            logger.info("Phase 2/3: Analyzing content (quality, blur, colors)...")
 
         results = []
         max_workers = self.config.get("processing.max_workers", 4)
@@ -218,7 +221,7 @@ class AnalysisPipeline:
 
         device_type = "GPU" if self.ml_analyzer.device.type == "cuda" else "CPU"
         if show_progress:
-            print(f"\nPhase 3/3: ML Analysis ({device_type}-accelerated scene/object detection)...")
+            logger.info(f"Phase 3/3: ML Analysis ({device_type}-accelerated scene/object detection)...")
 
         # Batch mode (recommended)
         if use_batch:
@@ -301,20 +304,20 @@ class AnalysisPipeline:
             content_results: Content analysis results
             ml_results: ML analysis results
         """
-        print(f"\n{'='*60}")
-        print(f"✓ Analysis Complete: {len(results)} images processed")
+        logger.info(f"{'='*60}")
+        logger.info(f"✓ Analysis Complete: {len(results)} images processed")
 
         # Error statistics
         errors = sum(1 for r in results if "error" in r)
         if errors:
-            print(f"  ⚠ Errors: {errors} images")
+            logger.error(f"  ⚠ Errors: {errors} images")
 
         # Quality statistics
         if content_results and any("quality_score" in r for r in content_results):
             quality_scores = [r["quality_score"] for r in content_results if "quality_score" in r]
             if quality_scores:
                 avg_quality = sum(quality_scores) / len(quality_scores)
-                print(f"  📊 Average quality: {avg_quality:.1f}/100")
+                logger.info(f"  📊 Average quality: {avg_quality:.1f}/100")
 
         # Scene statistics
         if ml_results and any("primary_scene" in r for r in ml_results):
@@ -325,6 +328,6 @@ class AnalysisPipeline:
                     scenes[scene] = scenes.get(scene, 0) + 1
 
             top_scenes = sorted(scenes.items(), key=lambda x: x[1], reverse=True)[:3]
-            print(f"  🎬 Top scenes: {', '.join(f'{s} ({c})' for s, c in top_scenes)}")
+            logger.info(f"  🎬 Top scenes: {', '.join(f'{s} ({c})' for s, c in top_scenes)}")
 
-        print(f"{'='*60}\n")
+        logger.info(f"{'='*60}\n")

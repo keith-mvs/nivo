@@ -7,8 +7,11 @@ from PIL import Image
 import piexif
 
 from ..utils.image_io import load_image, save_image_with_exif, has_transparency
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class ImageFormatter:
     """Convert images to standardized, compatible formats."""
 
@@ -60,7 +63,7 @@ class ImageFormatter:
             # Load image
             img = load_image(input_path)
             if img is None:
-                print(f"Failed to load image: {input_path}")
+                logger.error(f"Failed to load image: {input_path}")
                 return None
 
             # Determine target format
@@ -72,7 +75,7 @@ class ImageFormatter:
             # Check if conversion needed
             current_ext = Path(input_path).suffix.lower().lstrip('.')
             if current_ext == target_format:
-                print(f"Already in target format: {input_path}")
+                logger.info(f"Already in target format: {input_path}")
                 return input_path
 
             # Generate output path
@@ -100,16 +103,16 @@ class ImageFormatter:
                 if os.path.exists(output_path):
                     return output_path
                 else:
-                    print(f"Conversion succeeded but output not found: {output_path}")
+                    logger.warning(f"Conversion succeeded but output not found: {output_path}")
                     return None
             else:
                 if self.safe_conversion:
-                    print(f"Conversion failed, keeping original: {input_path}")
+                    logger.error(f"Conversion failed, keeping original: {input_path}")
                     return input_path
                 return None
 
         except Exception as e:
-            print(f"Error converting {input_path}: {e}")
+            logger.error(f"Error converting {input_path}: {e}")
             if self.safe_conversion:
                 return input_path
             return None
@@ -140,7 +143,7 @@ class ImageFormatter:
         total = len(input_paths)
         for i, input_path in enumerate(input_paths, 1):
             if show_progress:
-                print(f"Converting {i}/{total}: {Path(input_path).name}")
+                logger.info(f"Converting {i}/{total}: {Path(input_path).name}")
 
             # Generate output path if using output_dir
             output_path = None
@@ -156,7 +159,7 @@ class ImageFormatter:
             if converted_path:
                 results[input_path] = converted_path
 
-        print(f"\nConverted {len(results)}/{total} files successfully")
+        logger.info(f"Converted {len(results)}/{total} files successfully")
         return results
 
     def _determine_format(self, img: Image.Image) -> str:

@@ -6,8 +6,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from collections import defaultdict
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class ImageRenamer:
     """Rename images using intelligent patterns."""
 
@@ -83,7 +86,7 @@ class ImageRenamer:
                 rename_map[old_path] = new_path
 
             except Exception as e:
-                print(f"Error generating name for {old_path}: {e}")
+                logger.error(f"Error generating name for {old_path}: {e}")
 
         # Execute renames
         if not dry_run:
@@ -228,27 +231,27 @@ class ImageRenamer:
                 success_count += 1
 
             except Exception as e:
-                print(f"Error renaming {old_path} -> {new_path}: {e}")
+                logger.error(f"Error renaming {old_path} -> {new_path}: {e}")
                 error_count += 1
 
-        print(f"\nRenamed {success_count} files successfully")
+        logger.info(f"Renamed {success_count} files successfully")
         if error_count > 0:
-            print(f"Failed to rename {error_count} files")
+            logger.error(f"Failed to rename {error_count} files")
 
     def _preview_renames(self, rename_map: Dict[str, str]):
         """Preview renames without executing."""
-        print("\n=== Rename Preview ===")
-        print(f"Total files to rename: {len(rename_map)}\n")
+        logger.info("=== Rename Preview ===")
+        logger.info(f"Total files to rename: {len(rename_map)}\n")
 
         for i, (old_path, new_path) in enumerate(rename_map.items(), 1):
             old_name = Path(old_path).name
             new_name = Path(new_path).name
 
             if i <= 20:  # Show first 20
-                print(f"{old_name}")
-                print(f"  -> {new_name}\n")
+                logger.info(f"{old_name}")
+                logger.info(f"  -> {new_name}\n")
 
         if len(rename_map) > 20:
-            print(f"... and {len(rename_map) - 20} more files")
+            logger.info(f"... and {len(rename_map) - 20} more files")
 
-        print("\nRun without --dry-run to execute renames")
+        logger.info("Run without --dry-run to execute renames")

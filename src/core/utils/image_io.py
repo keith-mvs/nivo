@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from PIL import Image
 import piexif
+from ..utils.logging_config import get_logger
 
 # Supported image extensions
 SUPPORTED_FORMATS = {
@@ -17,6 +18,8 @@ RAW_FORMATS = {
 }
 
 
+
+logger = get_logger(__name__)
 def is_supported_image(file_path: str) -> bool:
     """
     Check if file is a supported image format.
@@ -50,7 +53,7 @@ def load_image(file_path: str) -> Optional[Image.Image]:
                 import pillow_heif
                 pillow_heif.register_heif_opener()
             except ImportError:
-                print(f"Warning: pillow-heif not installed, cannot open {file_path}")
+                logger.warning(f"Warning: pillow-heif not installed, cannot open {file_path}")
                 return None
 
         # Handle RAW formats
@@ -61,10 +64,10 @@ def load_image(file_path: str) -> Optional[Image.Image]:
                     rgb = raw.postprocess()
                 return Image.fromarray(rgb)
             except ImportError:
-                print(f"Warning: rawpy not installed, cannot open RAW file {file_path}")
+                logger.warning(f"Warning: rawpy not installed, cannot open RAW file {file_path}")
                 return None
             except Exception as e:
-                print(f"Error processing RAW file {file_path}: {e}")
+                logger.error(f"Error processing RAW file {file_path}: {e}")
                 return None
 
         # Standard formats
@@ -73,7 +76,7 @@ def load_image(file_path: str) -> Optional[Image.Image]:
         return img
 
     except Exception as e:
-        print(f"Error loading image {file_path}: {e}")
+        logger.error(f"Error loading image {file_path}: {e}")
         return None
 
 
@@ -115,7 +118,7 @@ def save_image_with_exif(
                     exif_bytes = piexif.dump(exif_dict)
                     save_kwargs['exif'] = exif_bytes
                 except Exception as e:
-                    print(f"Warning: Could not embed EXIF: {e}")
+                    logger.error(f"Warning: Could not embed EXIF: {e}")
 
         # PNG settings
         elif ext == '.png':
@@ -141,7 +144,7 @@ def save_image_with_exif(
         return True
 
     except Exception as e:
-        print(f"Error saving image to {output_path}: {e}")
+        logger.error(f"Error saving image to {output_path}: {e}")
         return False
 
 

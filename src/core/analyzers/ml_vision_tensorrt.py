@@ -18,8 +18,11 @@ from tqdm import tqdm
 
 from .base_ml_analyzer import BaseMLAnalyzer
 from ..interfaces.monitors import GPUMonitor
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class TensorRTVisionAnalyzer(BaseMLAnalyzer):
     """TensorRT-optimized ML vision analyzer for maximum GPU performance."""
 
@@ -69,10 +72,10 @@ class TensorRTVisionAnalyzer(BaseMLAnalyzer):
         # TensorRT models (compiled)
         self._tensorrt_detr = None
 
-        print(f"TensorRT ML Analyzer initialized on device: {self.device}")
-        print(f"Batch size: {batch_size}")
-        print(f"TensorRT enabled: {self.use_tensorrt}")
-        print(f"Precision: {precision}")
+        logger.info(f"TensorRT ML Analyzer initialized on device: {self.device}")
+        logger.info(f"Batch size: {batch_size}")
+        logger.info(f"TensorRT enabled: {self.use_tensorrt}")
+        logger.info(f"Precision: {precision}")
 
     def _load_detection_model(self):
         """Load DETR model with optional TensorRT optimization (implements abstract method)."""
@@ -87,14 +90,14 @@ class TensorRTVisionAnalyzer(BaseMLAnalyzer):
         try:
             from transformers import DetrImageProcessor, DetrForObjectDetection
 
-            print(f"Loading DETR model: {self.object_model_name}")
+            logger.debug(f"Loading DETR model: {self.object_model_name}")
             self._detr_processor = DetrImageProcessor.from_pretrained(self.object_model_name)
             self._detr_model = DetrForObjectDetection.from_pretrained(self.object_model_name).to(self.device)
             self._detr_model.eval()
-            print("DETR model loaded successfully")
+            logger.debug("DETR model loaded successfully")
 
         except Exception as e:
-            print(f"ERROR: Failed to load DETR model: {e}")
+            logger.error(f"ERROR: Failed to load DETR model: {e}")
             self._detr_model = "FAILED"
             self._detr_processor = None
 
@@ -103,8 +106,8 @@ class TensorRTVisionAnalyzer(BaseMLAnalyzer):
         try:
             import torch_tensorrt
 
-            print("Compiling DETR model with TensorRT...")
-            print(f"Target precision: {self.precision}")
+            logger.info("Compiling DETR model with TensorRT...")
+            logger.info(f"Target precision: {self.precision}")
 
             # Create sample input for compilation
             sample_input = torch.randn(1, 3, 800, 800).to(self.device)
@@ -118,11 +121,11 @@ class TensorRTVisionAnalyzer(BaseMLAnalyzer):
 
             # Compile model
             self._tensorrt_detr = torch_tensorrt.compile(self._detr_model, **compile_settings)
-            print("TensorRT compilation successful!")
+            logger.info("TensorRT compilation successful!")
 
         except Exception as e:
-            print(f"TensorRT compilation failed: {e}")
-            print("Falling back to standard PyTorch inference")
+            logger.error(f"TensorRT compilation failed: {e}")
+            logger.warning("Falling back to standard PyTorch inference")
             self._tensorrt_detr = None
 
     def _detect_objects_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:

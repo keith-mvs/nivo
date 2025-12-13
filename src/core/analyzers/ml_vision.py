@@ -13,8 +13,11 @@ from tqdm import tqdm
 
 from .base_ml_analyzer import BaseMLAnalyzer
 from ..interfaces.monitors import GPUMonitor
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class MLVisionAnalyzer(BaseMLAnalyzer):
     """ML-powered image analysis with GPU acceleration using DETR for object detection."""
 
@@ -54,7 +57,7 @@ class MLVisionAnalyzer(BaseMLAnalyzer):
         self._detr_model = None
         self._detr_processor = None
 
-        print(f"ML Analyzer initialized on device: {self.device}")
+        logger.info(f"ML Analyzer initialized on device: {self.device}")
 
     def _load_detection_model(self):
         """Load DETR model for object detection (implements abstract method)."""
@@ -65,14 +68,14 @@ class MLVisionAnalyzer(BaseMLAnalyzer):
         try:
             from transformers import DetrImageProcessor, DetrForObjectDetection
 
-            print(f"Loading DETR model: {self.object_model_name}")
+            logger.debug(f"Loading DETR model: {self.object_model_name}")
             self._detr_processor = DetrImageProcessor.from_pretrained(self.object_model_name)
             self._detr_model = DetrForObjectDetection.from_pretrained(self.object_model_name).to(self.device)
             self._detr_model.eval()
-            print("DETR model loaded successfully")
+            logger.debug("DETR model loaded successfully")
 
         except Exception as e:
-            print(f"ERROR: Failed to load DETR model: {e}")
+            logger.error(f"ERROR: Failed to load DETR model: {e}")
             self._detr_model = "FAILED"
             self._detr_processor = None
 

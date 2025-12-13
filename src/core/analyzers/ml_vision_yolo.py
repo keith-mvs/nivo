@@ -19,8 +19,11 @@ from tqdm import tqdm
 
 from .base_ml_analyzer import BaseMLAnalyzer
 from ..interfaces.monitors import GPUMonitor
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class YOLOVisionAnalyzer(BaseMLAnalyzer):
     """YOLOv8-optimized ML vision analyzer for maximum object detection performance."""
 
@@ -63,10 +66,10 @@ class YOLOVisionAnalyzer(BaseMLAnalyzer):
         # YOLO model cache
         self._yolo_model = None
 
-        print(f"YOLO ML Analyzer initialized on device: {self.device}")
-        print(f"Batch size: {batch_size}")
-        print(f"Precision: {precision} (AMP: {self.use_amp})")
-        print(f"YOLO variant: {yolo_model}")
+        logger.info(f"YOLO ML Analyzer initialized on device: {self.device}")
+        logger.info(f"Batch size: {batch_size}")
+        logger.info(f"Precision: {precision} (AMP: {self.use_amp})")
+        logger.info(f"YOLO variant: {yolo_model}")
 
     def _load_detection_model(self):
         """Load YOLOv8 model for object detection (implements abstract method)."""
@@ -77,7 +80,7 @@ class YOLOVisionAnalyzer(BaseMLAnalyzer):
         try:
             from ultralytics import YOLO
 
-            print(f"Loading YOLO model: {self.yolo_model_name}")
+            logger.debug(f"Loading YOLO model: {self.yolo_model_name}")
 
             # Load model and set device
             self._yolo_model = YOLO(self.yolo_model_name)
@@ -86,10 +89,10 @@ class YOLOVisionAnalyzer(BaseMLAnalyzer):
             if self.device.type == "cuda":
                 self._yolo_model.to(self.device)
 
-            print(f"YOLOv8 model loaded successfully on {self.device}")
+            logger.debug(f"YOLOv8 model loaded successfully on {self.device}")
 
         except Exception as e:
-            print(f"ERROR: Failed to load YOLO model: {e}")
+            logger.error(f"ERROR: Failed to load YOLO model: {e}")
             self._yolo_model = "FAILED"
 
     def _detect_objects_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:

@@ -14,8 +14,11 @@ import warnings
 from ..interfaces.analyzers import MLAnalyzer
 from ..interfaces.monitors import GPUMonitor
 from ..utils.gpu_monitor import get_monitor
+from ..utils.logging_config import get_logger
 
 warnings.filterwarnings('ignore')
+
+logger = get_logger(__name__)
 
 
 class BaseMLAnalyzer(MLAnalyzer, ABC):
@@ -81,14 +84,14 @@ class BaseMLAnalyzer(MLAnalyzer, ABC):
         """
         if use_gpu and torch.cuda.is_available():
             device = torch.device("cuda")
-            print(f"GPU detected: {torch.cuda.get_device_name(0)}")
-            print(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+            logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+            logger.info(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
         else:
             device = torch.device("cpu")
             if use_gpu:
-                print("WARNING: GPU requested but not available. Using CPU.")
+                logger.warning("GPU requested but not available. Using CPU.")
             else:
-                print("Using CPU for inference")
+                logger.info("Using CPU for inference")
         return device
 
     def _load_clip_model(self):
@@ -101,7 +104,7 @@ class BaseMLAnalyzer(MLAnalyzer, ABC):
         try:
             from transformers import CLIPProcessor, CLIPModel
 
-            print(f"Loading CLIP model: {self.scene_model_name}")
+            logger.info(f"Loading CLIP model: {self.scene_model_name}")
 
             try:
                 # Try safetensors first (PyTorch 2.5.1+ security requirement)
@@ -111,18 +114,18 @@ class BaseMLAnalyzer(MLAnalyzer, ABC):
                     use_safetensors=True
                 ).to(self.device)
                 self._clip_model.eval()
-                print("CLIP model loaded successfully (safetensors)")
+                logger.info("CLIP model loaded successfully (safetensors)")
 
             except Exception as e:
                 # Fallback without safetensors
-                print(f"Safetensors load failed, trying regular loading: {e}")
+                logger.debug(f"Safetensors load failed, trying regular loading: {e}")
                 self._clip_processor = CLIPProcessor.from_pretrained(self.scene_model_name)
                 self._clip_model = CLIPModel.from_pretrained(self.scene_model_name).to(self.device)
                 self._clip_model.eval()
-                print("CLIP model loaded successfully (regular)")
+                logger.info("CLIP model loaded successfully (regular)")
 
         except Exception as e:
-            print(f"ERROR: Failed to load CLIP model: {e}")
+            logger.error(f"Failed to load CLIP model: {e}")
             self._clip_model = "FAILED"
 
     def _classify_scene_batch(
@@ -289,7 +292,7 @@ class BaseMLAnalyzer(MLAnalyzer, ABC):
         if self.device.type == "cuda":
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
-            print("GPU cache cleared")
+            logger.debug("GPU cache cleared")
 
     def get_device_info(self) -> Dict[str, Any]:
         """

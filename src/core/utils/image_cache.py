@@ -11,8 +11,11 @@ from typing import Optional, Dict, Tuple
 from collections import OrderedDict
 from PIL import Image
 import numpy as np
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class ImageCache:
     """LRU cache for loaded images with memory management."""
 
@@ -102,7 +105,7 @@ class ImageCache:
             return img
 
         except Exception as e:
-            print(f"Error loading image {image_path}: {e}")
+            logger.error(f"Error loading image {image_path}: {e}")
             return None
 
     def _add_to_cache(self, cache_key: str, img: Image.Image):
@@ -198,11 +201,11 @@ class ImageCache:
     def print_stats(self):
         """Print cache statistics."""
         stats = self.get_stats()
-        print(f"\n=== Image Cache Statistics ===")
-        print(f"Enabled: {stats['enabled']}")
-        print(f"Items cached: {stats['items_cached']}/{self.max_items}")
-        print(f"Memory used: {stats['memory_used_mb']:.1f}/{stats['memory_limit_mb']:.1f} MB")
-        print(f"Hit rate: {stats['hit_rate']:.1f}% ({stats['hits']} hits / {stats['misses']} misses)")
+        logger.info(f"=== Image Cache Statistics ===")
+        logger.info(f"Enabled: {stats['enabled']}")
+        logger.info(f"Items cached: {stats['items_cached']}/{self.max_items}")
+        logger.info(f"Memory used: {stats['memory_used_mb']:.1f}/{stats['memory_limit_mb']:.1f} MB")
+        logger.info(f"Hit rate: {stats['hit_rate']:.1f}% ({stats['hits']} hits / {stats['misses']} misses)")
 
     def __contains__(self, image_path: str) -> bool:
         """Check if image is in cache."""

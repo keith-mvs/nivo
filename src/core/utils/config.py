@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from functools import lru_cache
 from pydantic import ValidationError
+from ..utils.logging_config import get_logger
 
 # Import Pydantic models
 try:
@@ -15,6 +16,8 @@ except ImportError:
     AppConfig = None
 
 
+
+logger = get_logger(__name__)
 class Config:
     """Configuration manager with validation and caching."""
 
@@ -38,11 +41,11 @@ class Config:
         if self.validate and AppConfig is not None:
             try:
                 self._validated_config = AppConfig(**self._raw_config)
-                print(f"Configuration validated successfully: {self.config_path}")
+                logger.info(f"Configuration validated successfully: {self.config_path}")
             except ValidationError as e:
-                print(f"ERROR: Configuration validation failed:")
-                print(e)
-                print("\nFalling back to unvalidated configuration.")
+                logger.error(f"ERROR: Configuration validation failed:")
+                logger.info(e)
+                logger.warning("Falling back to unvalidated configuration.")
                 self._validated_config = None
 
         # Cache this instance
@@ -63,22 +66,22 @@ class Config:
                 config = yaml.safe_load(f)
 
             if not config:
-                print(f"Warning: Empty config file at {self.config_path}")
+                logger.warning(f"Warning: Empty config file at {self.config_path}")
                 return self._get_default_config()
 
             return config
 
         except FileNotFoundError:
-            print(f"Warning: Config file not found at {self.config_path}")
+            logger.warning(f"Warning: Config file not found at {self.config_path}")
             return self._get_default_config()
 
         except yaml.YAMLError as e:
-            print(f"Error parsing config file: {e}")
-            print("Using default configuration.")
+            logger.error(f"Error parsing config file: {e}")
+            logger.info("Using default configuration.")
             return self._get_default_config()
 
         except Exception as e:
-            print(f"Unexpected error loading config: {e}")
+            logger.error(f"Unexpected error loading config: {e}")
             return self._get_default_config()
 
     @staticmethod
@@ -195,7 +198,7 @@ class Config:
             try:
                 self._validated_config = AppConfig(**self._raw_config)
             except ValidationError as e:
-                print(f"Warning: Configuration no longer valid after set: {e}")
+                logger.warning(f"Warning: Configuration no longer valid after set: {e}")
                 self._validated_config = None
 
     def save(self, path: Optional[str] = None):
@@ -219,15 +222,15 @@ class Config:
             True if valid, False otherwise
         """
         if AppConfig is None:
-            print("Pydantic models not available for validation")
+            logger.warning("Pydantic models not available for validation")
             return False
 
         try:
             AppConfig(**self._raw_config)
             return True
         except ValidationError as e:
-            print(f"Configuration validation failed:")
-            print(e)
+            logger.error(f"Configuration validation failed:")
+            logger.info(e)
             return False
 
     @classmethod

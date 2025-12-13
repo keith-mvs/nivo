@@ -26,8 +26,11 @@ from enum import Enum
 import json
 from pathlib import Path
 import statistics
+from ..utils.logging_config import get_logger
 
 
+
+logger = get_logger(__name__)
 class MetricType(Enum):
     """Types of metrics that can be tracked."""
     MODEL_LOAD = "model_load"
@@ -380,32 +383,32 @@ class PerformanceMetrics:
         """Print formatted metrics summary to console."""
         summary = self.get_summary()
 
-        print("\n" + "=" * 60)
-        print("PERFORMANCE METRICS SUMMARY")
-        print("=" * 60)
+        logger.info("" + "=" * 60)
+        logger.info("PERFORMANCE METRICS SUMMARY")
+        logger.info("=" * 60)
 
-        print(f"\nTotal images processed: {summary['total_images_processed']}")
-        print(f"Overall throughput: {summary['overall_throughput_img_per_sec']:.1f} img/sec")
+        logger.info(f"Total images processed: {summary['total_images_processed']}")
+        logger.info(f"Overall throughput: {summary['overall_throughput_img_per_sec']:.1f} img/sec")
 
         if summary['peak_memory_gb'] > 0:
-            print(f"Peak GPU memory: {summary['peak_memory_gb']:.2f} GB")
+            logger.info(f"Peak GPU memory: {summary['peak_memory_gb']:.2f} GB")
 
         if summary['models']:
-            print("\n--- Model Performance ---")
+            logger.info("--- Model Performance ---")
             for name, metrics in summary['models'].items():
-                print(f"\n{name}:")
-                print(f"  Load time: {metrics['load_time_ms']:.0f} ms")
-                print(f"  Images: {metrics['total_images']} in {metrics['total_batches']} batches")
-                print(f"  Avg inference: {metrics['avg_inference_ms']:.1f} ms")
-                print(f"  P50/P95: {metrics['p50_inference_ms']:.1f}/{metrics['p95_inference_ms']:.1f} ms")
-                print(f"  Throughput: {metrics['throughput_img_per_sec']:.1f} img/sec")
+                logger.info(f"{name}:")
+                logger.info(f"  Load time: {metrics['load_time_ms']:.0f} ms")
+                logger.info(f"  Images: {metrics['total_images']} in {metrics['total_batches']} batches")
+                logger.info(f"  Avg inference: {metrics['avg_inference_ms']:.1f} ms")
+                logger.info(f"  P50/P95: {metrics['p50_inference_ms']:.1f}/{metrics['p95_inference_ms']:.1f} ms")
+                logger.info(f"  Throughput: {metrics['throughput_img_per_sec']:.1f} img/sec")
 
         if summary['phases']:
-            print("\n--- Phase Timing ---")
+            logger.info("--- Phase Timing ---")
             for phase, stats in summary['phases'].items():
-                print(f"  {phase}: {stats['total_ms']:.0f} ms total, {stats['avg_ms']:.1f} ms avg")
+                logger.info(f"  {phase}: {stats['total_ms']:.0f} ms total, {stats['avg_ms']:.1f} ms avg")
 
-        print("\n" + "=" * 60)
+        logger.info("" + "=" * 60)
 
     def export_json(self, path: str):
         """

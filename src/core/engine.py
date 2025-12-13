@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import json
 
+from .utils.logging_config import get_logger
 from .utils.config import Config
+
+logger = get_logger(__name__)
 from .utils.image_io import is_supported_image
 from .factories.analyzer_factory import AnalyzerFactory
 from .pipeline.analysis_pipeline import AnalysisPipeline
@@ -138,7 +141,7 @@ class ImageEngine:
                 if os.path.isfile(file_path) and is_supported_image(file_path):
                     image_files.append(file_path)
 
-        print(f"Found {len(image_files)} images in {directory}")
+        logger.info(f"Found {len(image_files)} images in {directory}")
         return sorted(image_files)
 
     def analyze_images(
@@ -189,9 +192,9 @@ class ImageEngine:
         Returns:
             Pipeline results dictionary
         """
-        print(f"\n{'='*60}")
-        print(f"IMAGE ENGINE - Processing Pipeline")
-        print(f"{'='*60}\n")
+        logger.info("=" * 60)
+        logger.info("IMAGE ENGINE - Processing Pipeline")
+        logger.info("=" * 60)
 
         pipeline_results = {
             "directory": directory,
@@ -203,7 +206,7 @@ class ImageEngine:
         pipeline_results["total_images"] = len(image_paths)
 
         if len(image_paths) == 0:
-            print("No images found. Exiting.")
+            logger.warning("No images found. Exiting.")
             return pipeline_results
 
         # Step 2: Analyze (if enabled)
@@ -217,11 +220,11 @@ class ImageEngine:
                 report_path = "image_engine_analysis.json"
                 with open(report_path, 'w', encoding='utf-8') as f:
                     json.dump(analysis_results, f, indent=2, default=str)
-                print(f"Analysis report saved: {report_path}")
+                logger.info(f"Analysis report saved: {report_path}")
 
         # Step 3: Deduplication (if enabled)
         if dedupe:
-            print("\n=== Deduplication ===\n")
+            logger.info("=== Deduplication ===")
             duplicates = self.deduplicator.find_duplicates(image_paths)
             pipeline_results["duplicates"] = duplicates
 
@@ -236,7 +239,7 @@ class ImageEngine:
 
         # Step 4: Format conversion (if enabled)
         if convert_format:
-            print("\n=== Format Conversion ===\n")
+            logger.info("=== Format Conversion ===")
             converted = self.formatter.convert_batch(
                 image_paths,
                 output_dir=output_dir,
@@ -246,7 +249,7 @@ class ImageEngine:
 
         # Step 5: Rename files (if enabled)
         if rename and analysis_results:
-            print("\n=== Renaming Files ===\n")
+            logger.info("=== Renaming Files ===")
             rename_map = self.renamer.rename_files(
                 analysis_results,
                 output_dir=output_dir,
@@ -256,14 +259,14 @@ class ImageEngine:
 
         # Step 6: Embed tags (if enabled)
         if embed_tags and analysis_results:
-            print("\n=== Embedding Tags ===\n")
+            logger.info("=== Embedding Tags ===")
             files_and_data = [(r["file_path"], r) for r in analysis_results if "file_path" in r]
             tag_stats = self.tagger.batch_embed(files_and_data)
             pipeline_results["tagged_files"] = tag_stats["success"]
 
-        print(f"\n{'='*60}")
-        print("Pipeline complete!")
-        print(f"{'='*60}\n")
+        logger.info("=" * 60)
+        logger.info("Pipeline complete!")
+        logger.info("=" * 60)
 
         return pipeline_results
 

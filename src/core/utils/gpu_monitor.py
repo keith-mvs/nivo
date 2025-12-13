@@ -5,6 +5,7 @@ import threading
 import time
 from typing import Optional, Dict, Any
 import subprocess
+from ..utils.logging_config import get_logger
 
 # Import interface
 try:
@@ -14,6 +15,8 @@ except ImportError:
     GPUMonitorInterface = object
 
 
+
+logger = get_logger(__name__)
 class GPUMonitorImpl(GPUMonitorInterface):
     """Implementation of GPU monitoring with real-time stats."""
 
@@ -170,32 +173,32 @@ class GPUMonitorImpl(GPUMonitorInterface):
     def print_stats(self):
         """Print current GPU stats."""
         if not self.has_gpu:
-            print("GPU: Not available")
+            logger.warning("GPU: Not available")
             return
 
         stats = self.get_stats()
         if not stats:
-            print("GPU: No stats available")
+            logger.info("GPU: No stats available")
             return
 
-        print("\n" + "=" * 60)
-        print("GPU Statistics")
-        print("=" * 60)
+        logger.info("" + "=" * 60)
+        logger.info("GPU Statistics")
+        logger.info("=" * 60)
 
         if 'gpu_util' in stats:
-            print(f"GPU Utilization:    {stats['gpu_util']:.1f}%")
+            logger.info(f"GPU Utilization:    {stats['gpu_util']:.1f}%")
         if 'mem_util' in stats:
-            print(f"Memory Utilization: {stats['mem_util']:.1f}%")
+            logger.info(f"Memory Utilization: {stats['mem_util']:.1f}%")
         if 'memory_allocated_gb' in stats:
-            print(f"Memory Allocated:   {stats['memory_allocated_gb']:.2f} GB")
+            logger.info(f"Memory Allocated:   {stats['memory_allocated_gb']:.2f} GB")
         if 'memory_reserved_gb' in stats:
-            print(f"Memory Reserved:    {stats['memory_reserved_gb']:.2f} GB")
+            logger.info(f"Memory Reserved:    {stats['memory_reserved_gb']:.2f} GB")
         if 'temperature' in stats:
-            print(f"Temperature:        {stats['temperature']:.1f}°C")
+            logger.info(f"Temperature:        {stats['temperature']:.1f}°C")
         if 'power_draw' in stats:
-            print(f"Power Draw:         {stats['power_draw']:.1f} W")
+            logger.info(f"Power Draw:         {stats['power_draw']:.1f} W")
 
-        print("=" * 60 + "\n")
+        logger.info("=" * 60 + "\n")
 
 
 # Backwards compatibility: alias the implementation class

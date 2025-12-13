@@ -4,6 +4,7 @@ import piexif
 from PIL import Image
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from ..utils.logging_config import get_logger
 try:
     from iptcinfo3 import IPTCInfo
     IPTC_AVAILABLE = True
@@ -11,6 +12,8 @@ except ImportError:
     IPTC_AVAILABLE = False
 
 
+
+logger = get_logger(__name__)
 class MetadataTagger:
     """Embed tags and metadata into image files."""
 
@@ -33,7 +36,7 @@ class MetadataTagger:
         self.embed_keywords = embed_keywords
 
         if not IPTC_AVAILABLE:
-            print("Warning: iptcinfo3 not available, IPTC tagging disabled")
+            logger.warning("Warning: iptcinfo3 not available, IPTC tagging disabled")
 
     def embed_metadata(
         self,
@@ -104,7 +107,7 @@ class MetadataTagger:
             return True
 
         except Exception as e:
-            print(f"Error embedding metadata in {image_path}: {e}")
+            logger.error(f"Error embedding metadata in {image_path}: {e}")
             return False
 
     def _embed_iptc(self, image_path: str, analysis_data: Dict[str, Any]) -> bool:
@@ -133,7 +136,7 @@ class MetadataTagger:
             return True
 
         except Exception as e:
-            print(f"Error embedding IPTC in {image_path}: {e}")
+            logger.error(f"Error embedding IPTC in {image_path}: {e}")
             return False
 
     def _generate_caption(self, analysis_data: Dict[str, Any]) -> str:
@@ -196,12 +199,12 @@ class MetadataTagger:
                 else:
                     stats["failed"] += 1
             except Exception as e:
-                print(f"Error processing {image_path}: {e}")
+                logger.error(f"Error processing {image_path}: {e}")
                 stats["failed"] += 1
 
-        print(f"\nEmbedded metadata in {stats['success']} files")
+        logger.info(f"Embedded metadata in {stats['success']} files")
         if stats["failed"] > 0:
-            print(f"Failed: {stats['failed']} files")
+            logger.error(f"Failed: {stats['failed']} files")
 
         return stats
 

@@ -12,6 +12,9 @@ from tqdm import tqdm
 
 from ..utils.hash_utils import file_hash, quick_hash
 from ..utils.image_io import get_image_dimensions
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class Deduplicator:
@@ -50,12 +53,12 @@ class Deduplicator:
         Returns:
             Dictionary mapping hash -> list of duplicate file paths
         """
-        print(f"Scanning {len(file_paths)} files for duplicates...")
+        logger.info(f"Scanning {len(file_paths)} files for duplicates...")
 
         # Step 1: Quick hash screening (if enabled)
         if self.use_quick_hash and len(file_paths) > 100:
             file_paths = self._quick_hash_screening(file_paths, show_progress)
-            print(f"Quick screening reduced candidates to {len(file_paths)} files")
+            logger.info(f"Quick screening reduced candidates to {len(file_paths)} files")
 
         # Step 2: Full hash computation
         hash_map = self._compute_hashes(file_paths, show_progress)
@@ -69,9 +72,9 @@ class Deduplicator:
 
         if duplicates:
             total_dupes = sum(len(paths) - 1 for paths in duplicates.values())
-            print(f"Found {len(duplicates)} sets of duplicates ({total_dupes} duplicate files)")
+            logger.info(f"Found {len(duplicates)} sets of duplicates ({total_dupes} duplicate files)")
         else:
-            print("No duplicates found")
+            logger.info("No duplicates found")
 
         return duplicates
 
@@ -102,7 +105,7 @@ class Deduplicator:
                     qhash = future.result()
                     quick_hash_map[qhash].append(path)
                 except Exception as e:
-                    print(f"Error quick hashing {path}: {e}")
+                    logger.warning(f"Error quick hashing {path}: {e}")
 
         # Return only files with potential duplicates
         potential_dupes = []
@@ -134,7 +137,7 @@ class Deduplicator:
                     hash_val = future.result()
                     hash_map[hash_val].append(path)
                 except Exception as e:
-                    print(f"Error hashing {path}: {e}")
+                    logger.warning(f"Error hashing {path}: {e}")
 
         return hash_map
 
@@ -228,16 +231,16 @@ class Deduplicator:
                     if not dry_run:
                         try:
                             os.remove(path)
-                            print(f"Deleted: {path}")
+                            logger.debug(f"Deleted: {path}")
                         except Exception as e:
-                            print(f"Error deleting {path}: {e}")
+                            logger.error(f"Error deleting {path}: {e}")
 
         if dry_run:
-            print(f"\nDry run: Would delete {len(stats['files_to_delete'])} files")
-            print(f"Space that would be saved: {stats['space_saved'] / 1_000_000:.2f} MB")
+            logger.info(f"Dry run: Would delete {len(stats['files_to_delete'])} files")
+            logger.info(f"Space that would be saved: {stats['space_saved'] / 1_000_000:.2f} MB")
         else:
-            print(f"\nDeleted {len(stats['files_to_delete'])} duplicate files")
-            print(f"Space saved: {stats['space_saved'] / 1_000_000:.2f} MB")
+            logger.info(f"Deleted {len(stats['files_to_delete'])} duplicate files")
+            logger.info(f"Space saved: {stats['space_saved'] / 1_000_000:.2f} MB")
 
         return stats
 
@@ -282,6 +285,6 @@ class Deduplicator:
         if output_path:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(report)
-            print(f"Report saved to: {output_path}")
+            logger.info(f"Report saved to: {output_path}")
 
         return report
