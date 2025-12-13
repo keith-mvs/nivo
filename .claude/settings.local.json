@@ -32,9 +32,24 @@
       "Bash(git clone:*)",
       "Bash(git tag:*)",
       "Bash(pwsh:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" status --short)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" diff --name-only)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" diff src/core/models/config_models.py)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" status src/core/models/config_models.py)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" log --oneline -1 -- src/core/models/config_models.py)",
+      "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" status)",
+      "Bash(git -C:*)",
+      "Bash(Select-Object -First 15)",
+      "Bash(git diff-tree:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "Context7",
+    "GitHub",
+    "Microsoft Learn"
+  ]
 }
