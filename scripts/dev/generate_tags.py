@@ -5,13 +5,13 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from processors.tag_generator import TagGenerator
+from src.core.processors.tag_generator import TagGenerator
 
 # Load analysis
-input_file = "analysis.json"
-output_file = "analysis_with_tags.json"
+input_file = "batch1_analysis.json"
+output_file = "batch1_tags.json"
 
 print("=" * 70)
 print(f"LOADING ANALYSIS FROM: {input_file}")

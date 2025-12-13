@@ -208,6 +208,37 @@ class MetadataTagger:
 
         return stats
 
+    def write_tags(
+        self,
+        image_path: str,
+        keywords: List[str],
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> bool:
+        """
+        Write tags/keywords to image EXIF/IPTC metadata.
+
+        Args:
+            image_path: Path to image file
+            keywords: List of keywords/tags to write
+            title: Optional title/object name
+            description: Optional description
+
+        Returns:
+            True if successful
+        """
+        # Convert to analysis_data format expected by embed_metadata
+        analysis_data = {
+            "tags": keywords,
+        }
+
+        if title:
+            analysis_data["primary_scene"] = title
+        # Note: description will be added via IPTC caption, not quality_score
+        # quality_score expects an integer, so we'll let _generate_caption handle description
+
+        return self.embed_metadata(image_path, analysis_data, output_path=image_path)
+
     def read_embedded_tags(self, image_path: str) -> Dict[str, Any]:
         """Read embedded tags from image."""
         tags_data = {}

@@ -133,19 +133,40 @@ analysis:
 - Batch operations for efficiency
 - Typical speedup: 2-3x on subsequent runs with 60-90% hit rate
 
-### Face Detection & Recognition (✓ Implemented)
+### Face Detection & Recognition (✓ Implemented - InsightFace)
 
 **File:** `src/core/analyzers/face_detection.py`
 
-**Dependencies:** `dlib`, `face-recognition` (optional, installed)
+**Dependencies:** `insightface` 0.7.3, `onnxruntime-gpu` 1.23.2 (GPU-accelerated)
 
+**Installation:**
+```bash
+conda activate nivo-env
+pip install insightface onnxruntime-gpu
+```
+
+**API:**
 ```python
 from src.core.analyzers import FaceDetector, is_face_detection_available
+from src.core.utils.image_io import load_image
+import numpy as np
 
 if is_face_detection_available():
-    detector = FaceDetector(model="hog")  # or "cnn" for GPU
-    result = detector.detect_faces(image_path)
-    # Returns: {face_count, face_locations, has_faces, landmarks, encodings}
+    # Initialize (GPU-accelerated by default)
+    detector = FaceDetector(
+        model="buffalo_sc",      # or "buffalo_l" for higher accuracy
+        compute_encodings=True,  # 512D face embeddings
+        use_gpu=True             # CUDA via ONNX runtime
+    )
+
+    # Option 1: Direct file path (limited format support)
+    result = detector.detect_faces("image.jpg")
+
+    # Option 2: From numpy array (supports HEIC via image_io)
+    pil_img = load_image("photo.heic")  # PIL with HEIC support
+    img_array = np.array(pil_img.convert("RGB"))
+    result = detector.detect_faces_from_array(img_array)
+    # Returns: {face_count, has_faces, face_locations, face_landmarks, face_encodings}
 
     # Batch processing
     results = detector.detect_batch(image_paths)
@@ -156,8 +177,10 @@ if is_face_detection_available():
 ```
 
 **Models:**
-- `hog`: CPU-based, ~100-200ms/image, good accuracy
-- `cnn`: GPU-based, ~50-100ms/image, excellent accuracy (requires CUDA)
+- `buffalo_sc`: Lightweight model (~14MB), ~10-20ms/face (GPU), good accuracy, 512D embeddings
+- `buffalo_l`: Larger model, higher accuracy, slower, 512D embeddings
+
+**Performance:** ~10-20ms/face (GPU-accelerated) - 5-10x faster than previous face-recognition library
 
 **Use Cases:**
 - People counting

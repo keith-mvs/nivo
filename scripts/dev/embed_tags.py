@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from processors.tagger import MetadataTagger
+from src.core.processors.tagger import MetadataTagger
 
 
 def embed_tags_to_images(
@@ -117,7 +117,7 @@ def embed_tags_to_images(
                         shutil.copy2(file_path, backup_path)
 
                 # Embed tags
-                success = tagger.embed_tags(
+                success = tagger.write_tags(
                     image_path=file_path,
                     keywords=tag_data["keywords"],
                     title=tag_data.get("title"),
