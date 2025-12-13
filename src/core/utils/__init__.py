@@ -22,3 +22,7 @@ from .performance_metrics import (
     get_metrics,
     reset_metrics,
 )
+from .thumbnails import (
+    ThumbnailGenerator,
+    create_thumbnail,
+)

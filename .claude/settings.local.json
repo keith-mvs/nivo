@@ -42,7 +42,12 @@
       "Bash(git -C:*)",
       "Bash(Select-Object -First 15)",
       "Bash(git diff-tree:*)",
-      "Bash(conda activate:*)"
+      "Bash(conda activate:*)",
+      "Skill(example-skills:docx)",
+      "Bash(pandoc:*)",
+      "Bash(cmake:*)",
+      "Bash(conda search:*)",
+      "Bash(conda env:*)"
     ],
     "deny": [],
     "ask": []
