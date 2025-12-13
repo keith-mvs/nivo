@@ -105,7 +105,7 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
             self._vlm_model = "FAILED"
             self._object_detector = "FAILED"
 
-    def _classify_scene_batch(self, images: List[Image.Image]) -> List[str]:
+    def _classify_scene_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
         """
         Classify scene type using NVIDIA VLM (overrides base class).
 
@@ -113,7 +113,7 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
             images: List of PIL images
 
         Returns:
-            List of scene labels (one per image)
+            List of scene classification dictionaries
         """
         # Load models if needed
         if self._vlm_model is None:
@@ -121,9 +121,9 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
 
         if self._vlm_model == "FAILED":
             logger.warning("NVIDIA VLM not available, using fallback")
-            return ["unknown"] * len(images)
+            return [{"primary_scene": "unknown", "scene_scores": {}, "scene_confidence": 0.0}] * len(images)
 
-        scenes = []
+        results = []
         for img in images:
             try:
                 # Save image temporarily for API call
@@ -143,7 +143,11 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
 
                     # Extract primary scene (first word usually most relevant)
                     scene = description.strip().split()[0].lower() if description else "unknown"
-                    scenes.append(scene)
+                    results.append({
+                        "primary_scene": scene,
+                        "scene_scores": {scene: 1.0},
+                        "scene_confidence": 1.0
+                    })
 
                 finally:
                     # Clean up temp file
@@ -151,9 +155,13 @@ class NVIDIAVisionAnalyzer(BaseMLAnalyzer):
 
             except Exception as e:
                 logger.warning(f"Scene classification failed: {e}")
-                scenes.append("unknown")
+                results.append({
+                    "primary_scene": "unknown",
+                    "scene_scores": {},
+                    "scene_confidence": 0.0
+                })
 
-        return scenes
+        return results
 
     def _detect_objects_batch(self, images: List[Image.Image]) -> List[Dict[str, Any]]:
         """
