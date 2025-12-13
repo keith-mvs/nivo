@@ -17,7 +17,7 @@ analysis:
     # NVIDIA Build API (Priority 1)
     use_nvidia: true               # Enable NVIDIA Build API (highest quality)
     nvidia_model: "llama-vision"   # Options: "llama-vision" (Llama 3.2 11B), "nemotron" (Nemotron Nano 12B)
-    nvidia_api_key: null           # Optional: reads from NVIDIA_API_KEY env var if null
+    nvidia_api_key: null           # Optional: reads from NVIDIA_API_KEY or NVIDIA_LLAMA_11B_VISION_INSTRUCT env vars if null
 
     # Fallback options (if use_nvidia is false)
     use_yolo: false                # YOLOv8 local GPU

@@ -30,11 +30,15 @@ class NVIDIABuildClient:
         Initialize NVIDIA Build API client.
 
         Args:
-            api_key: NVIDIA API key (if None, reads from NVIDIA_API_KEY env var)
+            api_key: NVIDIA API key (if None, reads from env vars)
 
         Raises:
             ValueError: If API key not found
         """
+        # If NVIDIA_API_KEY not set, use NVIDIABUILD_AUTOGEN_31 as the key source
+        if not os.getenv("NVIDIA_API_KEY") and os.getenv("NVIDIABUILD_AUTOGEN_31"):
+            os.environ["NVIDIA_API_KEY"] = os.getenv("NVIDIABUILD_AUTOGEN_31")
+
         self.api_key = api_key or os.getenv("NVIDIA_API_KEY")
 
         if not self.api_key:
@@ -43,6 +47,9 @@ class NVIDIABuildClient:
                 "Set environment variable or pass api_key parameter.\n"
                 "Get your API key at: https://build.nvidia.com"
             )
+
+        # Debug: Log first/last 10 chars of API key
+        logger.debug(f"API key: {self.api_key[:10]}...{self.api_key[-10:]}")
 
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",

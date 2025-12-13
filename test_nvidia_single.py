@@ -28,7 +28,7 @@ def test_nvidia_analyzer():
     print()
 
     try:
-        # Initialize analyzer
+        # Initialize analyzer (automatically uses NVIDIABUILD_AUTOGEN_31 if NVIDIA_API_KEY not set)
         print("Initializing NVIDIA Build API client...")
         analyzer = NVIDIAVisionAnalyzer(
             model="llama-vision",

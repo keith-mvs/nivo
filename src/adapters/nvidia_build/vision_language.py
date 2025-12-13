@@ -87,7 +87,8 @@ class VisionLanguageModel(NVIDIABuildClient):
                 }
             ],
             "max_tokens": max_tokens,
-            "temperature": temperature
+            "temperature": temperature,
+            "stream": False
         }
 
         # Make API request
