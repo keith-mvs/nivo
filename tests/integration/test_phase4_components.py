@@ -99,6 +99,7 @@ class TestAnalysisPipeline:
         metadata = Mock(spec=MetadataExtractor)
         metadata.extract.return_value = {
             "file_name": "test.jpg",
+            "file_path": "test1.jpg",
             "file_size": 1024,
         }
 
@@ -152,8 +153,9 @@ class TestAnalysisPipeline:
     def test_pipeline_run_with_mocks(self, mock_analyzers):
         """Pipeline runs all phases with mocked analyzers."""
         metadata, content, ml = mock_analyzers
-        config = Config()
-        config._config = {"processing": {"max_workers": 2}}
+        config = Config(validate=False)
+        config.set("processing.max_workers", 2)
+        config.set("analysis.use_cache", False)
 
         pipeline = AnalysisPipeline(
             metadata_extractor=metadata,
@@ -176,8 +178,9 @@ class TestAnalysisPipeline:
     def test_pipeline_without_content(self, mock_analyzers):
         """Pipeline works without content analyzer."""
         metadata, _, ml = mock_analyzers
-        config = Config()
-        config._config = {"processing": {"max_workers": 2}}
+        config = Config(validate=False)
+        config.set("processing.max_workers", 2)
+        config.set("analysis.use_cache", False)
 
         pipeline = AnalysisPipeline(
             metadata_extractor=metadata,
@@ -198,8 +201,9 @@ class TestAnalysisPipeline:
     def test_pipeline_without_ml(self, mock_analyzers):
         """Pipeline works without ML analyzer."""
         metadata, content, _ = mock_analyzers
-        config = Config()
-        config._config = {"processing": {"max_workers": 2}}
+        config = Config(validate=False)
+        config.set("processing.max_workers", 2)
+        config.set("analysis.use_cache", False)
 
         pipeline = AnalysisPipeline(
             metadata_extractor=metadata,

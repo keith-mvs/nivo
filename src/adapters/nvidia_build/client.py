@@ -6,7 +6,7 @@ import requests
 import time
 from typing import Dict, Any, Optional
 from pathlib import Path
-from ..utils.logging_config import get_logger
+from ...core.utils.logging_config import get_logger
 
 
 
