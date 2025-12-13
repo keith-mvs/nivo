@@ -1,4 +1,5 @@
 """Database module for image storage and search."""
 
-# Image database will be added here when needed
-__all__ = []
+from .analysis_cache import AnalysisCache, get_cache, reset_cache
+
+__all__ = ["AnalysisCache", "get_cache", "reset_cache"]

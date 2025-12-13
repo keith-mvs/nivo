@@ -11,8 +11,7 @@ from ..utils.progress_reporter import ProgressReporter, format_analysis_stats
 from ..analyzers.metadata import MetadataExtractor
 from ..analyzers.content import ContentAnalyzer
 from ..utils.logging_config import get_logger
-
-
+from ..database.analysis_cache import AnalysisCache, get_cache
 
 logger = get_logger(__name__)
 class AnalysisPipeline:
@@ -45,6 +44,11 @@ class AnalysisPipeline:
         self.ml_analyzer = ml_analyzer
         self.config = config
 
+        # Initialize cache if enabled
+        use_cache = config.get("analysis.use_cache", True)
+        cache_path = config.get("analysis.cache_path", None)
+        self.cache = get_cache(cache_path) if use_cache else None
+
     def run(
         self,
         image_paths: List[str],
@@ -65,21 +69,49 @@ class AnalysisPipeline:
         if show_progress:
             logger.info(f"=== Analyzing {len(image_paths)} images ===")
             self._print_gpu_info()
-            print()
 
-        # Execute analysis phases
-        metadata_results = self._phase1_metadata(image_paths, show_progress)
-        content_results = self._phase2_content(image_paths, show_progress)
-        ml_results = self._phase3_ml(image_paths, use_batch, show_progress)
+        # Check cache for already-analyzed files
+        cached_results = {}
+        uncached_paths = image_paths
 
-        # Combine results
-        if show_progress:
-            logger.info("Combining analysis results...")
+        if self.cache:
+            cached_data = self.cache.get_cached_batch(image_paths)
+            cached_results = {p: r for p, r in cached_data.items() if r is not None}
+            uncached_paths = [p for p in image_paths if p not in cached_results]
 
-        results = []
-        for metadata, content, ml in zip(metadata_results, content_results, ml_results):
-            combined = {**metadata, **content, **ml}
-            results.append(combined)
+            if cached_results:
+                logger.info(f"Using {len(cached_results)} cached results, analyzing {len(uncached_paths)} new files")
+
+        # Execute analysis phases only for uncached files
+        if uncached_paths:
+            metadata_results = self._phase1_metadata(uncached_paths, show_progress)
+            content_results = self._phase2_content(uncached_paths, show_progress)
+            ml_results = self._phase3_ml(uncached_paths, use_batch, show_progress)
+        else:
+            metadata_results = []
+            content_results = []
+            ml_results = []
+
+        # Combine results for newly analyzed files
+        new_results = []
+        if uncached_paths:
+            if show_progress:
+                logger.info("Combining analysis results...")
+
+            for metadata, content, ml in zip(metadata_results, content_results, ml_results):
+                combined = {**metadata, **content, **ml}
+                new_results.append(combined)
+
+            # Cache the new results
+            if self.cache and new_results:
+                self.cache.cache_batch(new_results)
+
+        # Combine cached and new results, maintaining original order
+        path_to_result = {r.get("file_path"): r for r in new_results}
+        path_to_result.update(cached_results)
+
+        results = [path_to_result.get(p, {"file_path": p, "error": "analysis failed"})
+                   for p in image_paths]
 
         # Print summary
         if show_progress:

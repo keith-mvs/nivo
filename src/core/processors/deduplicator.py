@@ -1,6 +1,7 @@
-"""Deduplication system using file hashing.
+"""Deduplication system using file hashing and perceptual similarity.
 
 Efficiently finds and handles duplicate photos using multi-threaded hashing.
+Supports both exact duplicates (byte-identical) and perceptual duplicates (visually similar).
 """
 
 import os
@@ -9,6 +10,8 @@ from typing import Dict, List, Set, Tuple, Optional
 from collections import defaultdict
 import concurrent.futures
 from tqdm import tqdm
+from PIL import Image
+import imagehash
 
 from ..utils.hash_utils import file_hash, quick_hash
 from ..utils.image_io import get_image_dimensions
@@ -77,6 +80,129 @@ class Deduplicator:
             logger.info("No duplicates found")
 
         return duplicates
+
+    def find_similar(
+        self,
+        file_paths: List[str],
+        threshold: int = 8,
+        hash_type: str = "phash",
+        show_progress: bool = True,
+    ) -> Dict[str, List[str]]:
+        """
+        Find visually similar (near-duplicate) images using perceptual hashing.
+
+        Args:
+            file_paths: List of file paths to check
+            threshold: Maximum Hamming distance to consider similar (0=identical, 64=completely different)
+                      Recommended: 8-12 for visually similar, 4-6 for very similar
+            hash_type: Hash algorithm (phash, dhash, average_hash, whash)
+            show_progress: Show progress bar
+
+        Returns:
+            Dictionary mapping group_id -> list of similar file paths
+        """
+        logger.info(f"Scanning {len(file_paths)} files for similar images (threshold={threshold})...")
+
+        # Step 1: Compute perceptual hashes
+        phash_map = self._compute_perceptual_hashes(file_paths, hash_type, show_progress)
+
+        # Step 2: Cluster similar images
+        similar_groups = self._cluster_similar_images(phash_map, threshold, show_progress)
+
+        if similar_groups:
+            total_similar = sum(len(paths) for paths in similar_groups.values())
+            logger.info(f"Found {len(similar_groups)} groups of similar images ({total_similar} total files)")
+        else:
+            logger.info("No similar images found")
+
+        return similar_groups
+
+    def _compute_perceptual_hashes(
+        self,
+        file_paths: List[str],
+        hash_type: str,
+        show_progress: bool,
+    ) -> Dict[str, "imagehash.ImageHash"]:
+        """Compute perceptual hashes for all images."""
+        phash_map = {}
+        hash_func = getattr(imagehash, hash_type, imagehash.phash)
+
+        iterator = tqdm(file_paths, desc="Computing perceptual hashes") if show_progress else file_paths
+
+        def compute_hash(path: str):
+            try:
+                img = Image.open(path)
+                return path, hash_func(img)
+            except Exception as e:
+                logger.warning(f"Error computing perceptual hash for {path}: {e}")
+                return path, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [executor.submit(compute_hash, path) for path in file_paths]
+
+            for future in concurrent.futures.as_completed(futures):
+                path, hash_val = future.result()
+                if hash_val is not None:
+                    phash_map[path] = hash_val
+
+        return phash_map
+
+    def _cluster_similar_images(
+        self,
+        phash_map: Dict[str, "imagehash.ImageHash"],
+        threshold: int,
+        show_progress: bool,
+    ) -> Dict[str, List[str]]:
+        """Cluster images by perceptual similarity using union-find algorithm."""
+        paths = list(phash_map.keys())
+        n = len(paths)
+
+        if n == 0:
+            return {}
+
+        # Union-find data structure
+        parent = list(range(n))
+
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+
+        def union(x, y):
+            px, py = find(x), find(y)
+            if px != py:
+                parent[px] = py
+
+        # Compare all pairs and union similar ones
+        logger.debug(f"Comparing {n * (n - 1) // 2} image pairs...")
+
+        comparisons = [(i, j) for i in range(n) for j in range(i + 1, n)]
+        iterator = tqdm(comparisons, desc="Comparing images") if show_progress else comparisons
+
+        for i, j in iterator:
+            hash_i = phash_map[paths[i]]
+            hash_j = phash_map[paths[j]]
+
+            # Hamming distance between hashes
+            distance = hash_i - hash_j
+
+            if distance <= threshold:
+                union(i, j)
+
+        # Group by cluster
+        clusters = defaultdict(list)
+        for i in range(n):
+            root = find(i)
+            clusters[root].append(paths[i])
+
+        # Filter to only groups with multiple images
+        similar_groups = {
+            f"group_{i}": sorted(paths)
+            for i, paths in enumerate(clusters.values())
+            if len(paths) > 1
+        }
+
+        return similar_groups
 
     def _quick_hash_screening(
         self,
