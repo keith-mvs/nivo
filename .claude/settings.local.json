@@ -41,7 +41,8 @@
       "Bash(git -C \"C:\\Users\\kjfle\\Workspace\\nivo\" status)",
       "Bash(git -C:*)",
       "Bash(Select-Object -First 15)",
-      "Bash(git diff-tree:*)"
+      "Bash(git diff-tree:*)",
+      "Bash(conda activate:*)"
     ],
     "deny": [],
     "ask": []

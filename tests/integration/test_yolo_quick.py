@@ -7,15 +7,28 @@ from src.core.analyzers.ml_vision_yolo import YOLOVisionAnalyzer
 def test_yolo():
     """Test YOLO analyzer on 10 sample images."""
 
-    # Find test images
-    camera_roll = Path("C:/Users/kjfle/Pictures/Camera Roll")
-    all_images = list(camera_roll.glob("*.jpg"))[:10]
+    # Find test images from multiple sources
+    test_dirs = [
+        Path("D:/Pictures/jpeg"),
+        Path("D:/Pictures/heic"),
+        Path("C:/Users/kjfle/Pictures/Camera Roll"),
+        Path("C:/Users/kjfle/Pictures"),
+    ]
+
+    all_images = []
+    for test_dir in test_dirs:
+        if test_dir.exists():
+            all_images.extend(list(test_dir.glob("*.jpg"))[:5])
+            all_images.extend(list(test_dir.glob("*.jpeg"))[:5])
+            all_images.extend(list(test_dir.glob("*.heic"))[:5])
+            all_images.extend(list(test_dir.glob("*.png"))[:5])
+        if len(all_images) >= 10:
+            break
+
+    all_images = all_images[:10]  # Limit to 10 images
 
     if not all_images:
-        all_images = list(camera_roll.glob("*.heic"))[:10]
-
-    if not all_images:
-        print("ERROR: No test images found in Camera Roll")
+        print("ERROR: No test images found in any test directory")
         return
 
     test_images = [str(p) for p in all_images]
